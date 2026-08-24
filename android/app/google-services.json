@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "968337721299",
+    "project_id": "kinkitchen-51b17",
+    "storage_bucket": "kinkitchen-51b17.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:968337721299:android:8c41f6fcbcc9653611d126",
+        "android_client_info": {
+          "package_name": "com.example.kinkitchen"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "968337721299-69f2oe1th4rj5hlvbcb3queb93j7m814.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD5PZvo6CjIMdAz33VRppX7A0GqnrApYKc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "968337721299-69f2oe1th4rj5hlvbcb3queb93j7m814.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
