@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../config/api_config.dart';
@@ -7,13 +9,13 @@ import '../errors/failure.dart';
 
 class ApiClient {
   final http.Client _client;
+  final _secureStorage = const FlutterSecureStorage();
 
   ApiClient({http.Client? client}) : _client = client ?? http.Client();
 
   // Retrieve locally stored backend Auth Bearer Token
   Future<String?> _getAuthToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('auth_token');
+    return await _secureStorage.read(key: 'auth_token');
   }
 
   Future<Map<String, String>> _getHeaders({bool isMultipart = false}) async {
@@ -22,8 +24,17 @@ class ApiClient {
       'Accept': 'application/json',
       if (!isMultipart) 'Content-Type': 'application/json',
       if (token != null) 'Authorization': 'Bearer $token',
+      if (token != null) 'X-Authorization': 'Bearer $token',
     };
     return headers;
+  }
+
+  Future<void> _clearLocalSessionAndRedirect() async {
+    await _secureStorage.delete(key: 'auth_token');
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('user_role');
+    await prefs.remove('user_email');
+    NavigationService.navigatorKey.currentState?.pushNamedAndRemoveUntil('/role-selection', (route) => false);
   }
 
   // GET Request
@@ -154,6 +165,7 @@ class ApiClient {
       case 400:
         throw Failure(body['message'] ?? 'Bad Request');
       case 401:
+        _clearLocalSessionAndRedirect();
         throw const AuthFailure('Session expired. Please log in again.');
       case 403:
         throw const AuthFailure('Access denied. You do not have permissions.');
@@ -176,4 +188,8 @@ class ApiClient {
         );
     }
   }
+}
+
+class NavigationService {
+  static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 }

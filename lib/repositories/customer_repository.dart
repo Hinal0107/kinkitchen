@@ -14,21 +14,24 @@ class CustomerRepository {
   // 1. Browse Active Restaurants
   Future<List<Restaurant>> getRestaurants() async {
     final response = await _apiClient.get(ApiConfig.customerRestaurants);
-    final List<dynamic> list = response['restaurants'] ?? [];
-    return list.map((json) => Restaurant.fromJson(json)).toList();
+    final data = response['data'] ?? response['restaurants'];
+    final List<dynamic> list = (data is List ? data : (data is Map && data.containsKey('data') ? data['data'] : [])) ?? [];
+    return list.map((json) => Restaurant.fromJson(json as Map<String, dynamic>)).toList();
   }
 
   // 2. Fetch Selected Restaurant Metadata
   Future<Restaurant> getRestaurantDetails(int restaurantId) async {
     final response = await _apiClient.get('${ApiConfig.customerRestaurants}/$restaurantId');
-    return Restaurant.fromJson(response['restaurant']);
+    final data = response['data'] ?? response['restaurant'];
+    return Restaurant.fromJson(data as Map<String, dynamic>);
   }
 
   // 3. Fetch Categories for a specific Restaurant
   Future<List<MenuCategory>> getRestaurantCategories(int restaurantId) async {
     final response = await _apiClient.get('${ApiConfig.customerRestaurants}/$restaurantId/categories');
-    final List<dynamic> list = response['categories'] ?? [];
-    return list.map((json) => MenuCategory.fromJson(json)).toList();
+    final data = response['data'] ?? response['categories'];
+    final List<dynamic> list = (data is List ? data : (data is Map && data.containsKey('data') ? data['data'] : [])) ?? [];
+    return list.map((json) => MenuCategory.fromJson(json as Map<String, dynamic>)).toList();
   }
 
   // 4. Fetch Menu Items for a specific Restaurant (with optional category and search parameters)
@@ -47,15 +50,17 @@ class CustomerRepository {
       '${ApiConfig.customerRestaurants}/$restaurantId/menu',
       queryParameters: queryParams,
     );
-    final List<dynamic> list = response['menu_items'] ?? [];
-    return list.map((json) => MenuItem.fromJson(json)).toList();
+    final data = response['data'] ?? response['menu_items'];
+    final List<dynamic> list = (data is List ? data : (data is Map && data.containsKey('data') ? data['data'] : [])) ?? [];
+    return list.map((json) => MenuItem.fromJson(json as Map<String, dynamic>)).toList();
   }
 
   // 5. Fetch Subscription Plans for a specific Restaurant
   Future<List<SubscriptionPlan>> getRestaurantPlans(int restaurantId) async {
     final response = await _apiClient.get('${ApiConfig.customerRestaurants}/$restaurantId/subscription-plans');
-    final List<dynamic> list = response['plans'] ?? [];
-    return list.map((json) => SubscriptionPlan.fromJson(json)).toList();
+    final data = response['data'] ?? response['plans'];
+    final List<dynamic> list = (data is List ? data : (data is Map && data.containsKey('data') ? data['data'] : [])) ?? [];
+    return list.map((json) => SubscriptionPlan.fromJson(json as Map<String, dynamic>)).toList();
   }
 
   // 6. Submit Item to backend Cart
@@ -66,14 +71,16 @@ class CustomerRepository {
   // 7. Place Order/Checkout
   Future<Order> createOrder(Map<String, dynamic> data) async {
     final response = await _apiClient.post(ApiConfig.customerOrders, body: data);
-    return Order.fromJson(response['order']);
+    final resData = response['data'] ?? response['order'];
+    return Order.fromJson(resData as Map<String, dynamic>);
   }
 
   // 8. Fetch Order History
   Future<List<Order>> getOrders() async {
     final response = await _apiClient.get(ApiConfig.customerOrders);
-    final List<dynamic> list = response['orders'] ?? [];
-    return list.map((json) => Order.fromJson(json)).toList();
+    final data = response['data'] ?? response['orders'];
+    final List<dynamic> list = (data is List ? data : (data is Map && data.containsKey('data') ? data['data'] : [])) ?? [];
+    return list.map((json) => Order.fromJson(json as Map<String, dynamic>)).toList();
   }
 
   // 9. Fetch Order Details & Tracking Status Timeline

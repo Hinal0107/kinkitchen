@@ -1,68 +1,59 @@
 import 'dart:io' show Platform;
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../core/config/api_config.dart';
 import '../core/network/api_client.dart';
 import '../models/user.dart';
+import 'fcm_service.dart';
 
 class AuthService {
   final ApiClient _apiClient;
   final fb.FirebaseAuth _firebaseAuth;
+  final _secureStorage = const FlutterSecureStorage();
+  final _fcmService = FcmService();
 
   AuthService({ApiClient? apiClient, fb.FirebaseAuth? firebaseAuth})
       : _apiClient = apiClient ?? ApiClient(),
         _firebaseAuth = firebaseAuth ?? fb.FirebaseAuth.instance;
 
-  // Sign in with email and password via Firebase + backend login
+  // Sign in with email and password via Laravel backend login
   Future<User> login({
     required String email,
     required String password,
   }) async {
-    // Generate a deterministic mock UID in case Firebase is offline
-    final String cleanEmail = email.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '-');
-    String firebaseUid = 'mock-uid-$cleanEmail';
-
-    // 1. Try to Authenticate with Firebase Auth
-    try {
-      final fb.UserCredential credential = await _firebaseAuth.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-      final fb.User? fbUser = credential.user;
-      if (fbUser != null) {
-        firebaseUid = fbUser.uid;
-      }
-    } catch (e) {
-      // Catch network-request-failed or offline errors and use mock UID as fallback
-      print('Firebase Auth offline/failed. Falling back to local backend direct login. Error: $e');
+    // Generate a unique persistent device ID
+    final prefs = await SharedPreferences.getInstance();
+    final String deviceType = Platform.isAndroid ? 'android' : 'ios';
+    String? deviceId = prefs.getString('device_id');
+    if (deviceId == null) {
+      deviceId = 'device_${deviceType}_${DateTime.now().millisecondsSinceEpoch}';
+      await prefs.setString('device_id', deviceId);
     }
 
-    // 2. Authenticate with Laravel Backend using firebase_uid
-    final String deviceType = Platform.isAndroid ? 'android' : 'ios';
-    final String deviceId = 'device-$deviceType-${firebaseUid.substring(0, firebaseUid.length > 5 ? 5 : firebaseUid.length)}';
-    
+    // Get current FCM token
+    final String? fcmToken = await _fcmService.getFcmToken();
+
     final response = await _apiClient.post(
       ApiConfig.login,
       body: {
-        'firebase_uid': firebaseUid,
+        'email': email,
+        'password': password,
         'device_type': deviceType,
-        'fcm_token': 'mock-fcm-token-${firebaseUid.substring(0, firebaseUid.length > 8 ? 8 : firebaseUid.length)}',
         'device_id': deviceId,
+        'fcm_token': fcmToken ?? 'mock-fcm-token-for-testing',
       },
     );
 
-    // 3. Extract the token and user from backend response
-    // Backend returns: { "success": true, "data": { "user": {...}, "token": "...", "role": "..." } }
+    // Extract token and user from response
     final dynamic responseData = response['data'] ?? response;
     final String token = responseData['token'] as String? 
-        ?? responseData['access_token'] as String? 
-        ?? firebaseUid;
+        ?? responseData['access_token'] as String;
     final Map<String, dynamic> userJson = (responseData['user'] ?? responseData) as Map<String, dynamic>;
     final User user = User.fromJson(userJson);
 
-    // 4. Save backend token and role locally
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('auth_token', token);
+    // Save Sanctum token in Secure Storage and non-sensitive session data in SharedPreferences
+    await _secureStorage.write(key: 'auth_token', value: token);
     await prefs.setString('user_role', user.role);
     await prefs.setString('user_email', user.email);
 
@@ -108,6 +99,8 @@ class AuthService {
         'phone': phone,
         'firebase_uid': firebaseUid,
         'role': 'customer',
+        'password': password,
+        'password_confirmation': password,
         'address_line_1': address,
         'city': city,
         'pincode': postcode,
@@ -161,6 +154,8 @@ class AuthService {
         'phone': phone,
         'firebase_uid': firebaseUid,
         'role': 'restaurant',
+        'password': password,
+        'password_confirmation': password,
         'restaurant_name': name,
         'restaurant_address': address,
         'restaurant_city': 'London',
@@ -190,7 +185,13 @@ class AuthService {
   // Logout from Firebase + backend API
   Future<void> logout() async {
     try {
-      await _apiClient.post('/auth/logout');
+      final String? fcmToken = await _fcmService.getFcmToken();
+      await _apiClient.post(
+        '/auth/logout',
+        body: {
+          if (fcmToken != null) 'fcm_token': fcmToken,
+        },
+      );
     } catch (_) {}
 
     try {
@@ -198,7 +199,7 @@ class AuthService {
     } catch (_) {}
 
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('auth_token');
+    await _secureStorage.delete(key: 'auth_token');
     await prefs.remove('user_role');
     await prefs.remove('user_email');
   }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/widgets/kinkitchen_logo.dart';
 import '../../../../core/widgets/custom_button.dart';
 import '../../../../services/auth_service.dart';
+import '../../../../services/fcm_service.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -33,6 +34,17 @@ class _SplashScreenState extends State<SplashScreen> {
     if (role != null) {
       try {
         final user = await _authService.getCurrentUser();
+        
+        // Sync FCM token with backend on successful session restore
+        try {
+          final fcmToken = await FcmService().getFcmToken();
+          if (fcmToken != null) {
+            await FcmService().syncTokenWithBackend(fcmToken);
+          }
+        } catch (e) {
+          debugPrint('Error syncing FCM token on session restore: $e');
+        }
+
         if (!mounted) return;
         if (user.role == 'customer') {
           Navigator.pushNamedAndRemoveUntil(context, '/dashboard', (route) => false);

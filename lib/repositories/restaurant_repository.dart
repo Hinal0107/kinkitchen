@@ -15,25 +15,28 @@ class RestaurantRepository {
   // 1. Profile Actions
   Future<Restaurant> getProfile() async {
     final response = await _apiClient.get(ApiConfig.restaurantProfile);
-    return Restaurant.fromJson(response['restaurant']);
+    final data = response['data'] ?? response['restaurant'];
+    return Restaurant.fromJson(data as Map<String, dynamic>);
   }
 
   Future<Restaurant> updateProfile(Map<String, String> fields, {File? logo}) async {
     final response = await _apiClient.multipart(
-      'POST', // Often Laravel uses POST with _method=PUT or straight POST for multipart
+      'POST',
       ApiConfig.restaurantProfile,
       fields,
       fileKey: logo != null ? 'logo' : null,
       file: logo,
     );
-    return Restaurant.fromJson(response['restaurant']);
+    final data = response['data'] ?? response['restaurant'];
+    return Restaurant.fromJson(data as Map<String, dynamic>);
   }
 
   // 2. Menu Category Actions
   Future<List<MenuCategory>> getCategories() async {
     final response = await _apiClient.get(ApiConfig.restaurantCategories);
-    final List<dynamic> list = response['categories'] ?? [];
-    return list.map((json) => MenuCategory.fromJson(json)).toList();
+    final data = response['data'] ?? response['categories'];
+    final List<dynamic> list = (data is List ? data : (data is Map && data.containsKey('data') ? data['data'] : [])) ?? [];
+    return list.map((json) => MenuCategory.fromJson(json as Map<String, dynamic>)).toList();
   }
 
   Future<MenuCategory> createCategory(String name, String description, String status, {File? image}) async {
@@ -48,7 +51,8 @@ class RestaurantRepository {
       fileKey: image != null ? 'image' : null,
       file: image,
     );
-    return MenuCategory.fromJson(response['category']);
+    final data = response['data'] ?? response['category'];
+    return MenuCategory.fromJson(data as Map<String, dynamic>);
   }
 
   Future<MenuCategory> updateCategory(int id, String name, String description, String status, {File? image}) async {
@@ -56,7 +60,7 @@ class RestaurantRepository {
       'POST',
       '${ApiConfig.restaurantCategories}/$id',
       {
-        '_method': 'PUT', // Laravel method spoofing for multipart PUT
+        '_method': 'PUT',
         'name': name,
         'description': description,
         'status': status,
@@ -64,7 +68,8 @@ class RestaurantRepository {
       fileKey: image != null ? 'image' : null,
       file: image,
     );
-    return MenuCategory.fromJson(response['category']);
+    final data = response['data'] ?? response['category'];
+    return MenuCategory.fromJson(data as Map<String, dynamic>);
   }
 
   Future<void> deleteCategory(int id) async {
@@ -78,8 +83,9 @@ class RestaurantRepository {
       if (search != null && search.isNotEmpty) 'search': search,
     };
     final response = await _apiClient.get(ApiConfig.restaurantMenuItems, queryParameters: queryParams);
-    final List<dynamic> list = response['menu_items'] ?? [];
-    return list.map((json) => MenuItem.fromJson(json)).toList();
+    final data = response['data'] ?? response['menu_items'];
+    final List<dynamic> list = (data is List ? data : (data is Map && data.containsKey('data') ? data['data'] : [])) ?? [];
+    return list.map((json) => MenuItem.fromJson(json as Map<String, dynamic>)).toList();
   }
 
   Future<MenuItem> createMenuItem(Map<String, String> fields, {File? image}) async {
@@ -90,7 +96,8 @@ class RestaurantRepository {
       fileKey: image != null ? 'image' : null,
       file: image,
     );
-    return MenuItem.fromJson(response['menu_item']);
+    final data = response['data'] ?? response['menu_item'];
+    return MenuItem.fromJson(data as Map<String, dynamic>);
   }
 
   Future<MenuItem> updateMenuItem(int id, Map<String, String> fields, {File? image}) async {
@@ -104,7 +111,8 @@ class RestaurantRepository {
       fileKey: image != null ? 'image' : null,
       file: image,
     );
-    return MenuItem.fromJson(response['menu_item']);
+    final data = response['data'] ?? response['menu_item'];
+    return MenuItem.fromJson(data as Map<String, dynamic>);
   }
 
   Future<void> deleteMenuItem(int id) async {
@@ -114,18 +122,21 @@ class RestaurantRepository {
   // 4. Subscription Plan Actions
   Future<List<SubscriptionPlan>> getPlans() async {
     final response = await _apiClient.get(ApiConfig.restaurantPlans);
-    final List<dynamic> list = response['plans'] ?? [];
-    return list.map((json) => SubscriptionPlan.fromJson(json)).toList();
+    final data = response['data'] ?? response['plans'];
+    final List<dynamic> list = (data is List ? data : (data is Map && data.containsKey('data') ? data['data'] : [])) ?? [];
+    return list.map((json) => SubscriptionPlan.fromJson(json as Map<String, dynamic>)).toList();
   }
 
   Future<SubscriptionPlan> createPlan(Map<String, dynamic> data) async {
     final response = await _apiClient.post(ApiConfig.restaurantPlans, body: data);
-    return SubscriptionPlan.fromJson(response['plan']);
+    final resData = response['data'] ?? response['plan'];
+    return SubscriptionPlan.fromJson(resData as Map<String, dynamic>);
   }
 
   Future<SubscriptionPlan> updatePlan(int id, Map<String, dynamic> data) async {
     final response = await _apiClient.put('${ApiConfig.restaurantPlans}/$id', body: data);
-    return SubscriptionPlan.fromJson(response['plan']);
+    final resData = response['data'] ?? response['plan'];
+    return SubscriptionPlan.fromJson(resData as Map<String, dynamic>);
   }
 
   Future<void> deletePlan(int id) async {
@@ -135,12 +146,14 @@ class RestaurantRepository {
   // 5. Orders Actions
   Future<List<Order>> getOrders() async {
     final response = await _apiClient.get(ApiConfig.restaurantOrders);
-    final List<dynamic> list = response['orders'] ?? [];
-    return list.map((json) => Order.fromJson(json)).toList();
+    final data = response['data'] ?? response['orders'];
+    final List<dynamic> list = (data is List ? data : (data is Map && data.containsKey('data') ? data['data'] : [])) ?? [];
+    return list.map((json) => Order.fromJson(json as Map<String, dynamic>)).toList();
   }
 
   Future<Order> updateOrderStatus(int id, String status) async {
     final response = await _apiClient.put('${ApiConfig.restaurantOrders}/$id/status', body: {'status': status});
-    return Order.fromJson(response['order']);
+    final data = response['data'] ?? response['order'];
+    return Order.fromJson(data as Map<String, dynamic>);
   }
 }
