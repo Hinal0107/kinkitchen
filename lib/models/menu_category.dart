@@ -17,12 +17,12 @@ class MenuCategory {
 
   factory MenuCategory.fromJson(Map<String, dynamic> json) {
     return MenuCategory(
-      id: json['id'] as int,
-      restaurantId: json['restaurant_id'] as int,
-      name: json['name'] as String,
+      id: json['id'] as int? ?? 0,
+      restaurantId: json['restaurant_id'] as int? ?? 0,
+      name: json['name'] as String? ?? 'General',
       description: json['description'] as String? ?? '',
       status: json['status'] as String? ?? 'active',
-      imageUrl: json['image_url'] as String?,
+      imageUrl: json['imageUrl'] as String? ?? json['image_url'] as String?,
     );
   }
 

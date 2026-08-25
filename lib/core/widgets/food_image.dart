@@ -11,7 +11,7 @@ class FoodImage extends StatelessWidget {
     required this.title,
     this.width = double.infinity,
     this.height = 160,
-    this.borderRadius = 12,
+    this.borderRadius = 12, String? imageUrl,
   });
 
   @override

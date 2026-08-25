@@ -10,6 +10,7 @@ class MenuItem {
   final bool availability;
   final String status; // 'active', 'inactive'
   final String? imageUrl;
+  final String? scheduleDate;
 
   MenuItem({
     required this.id,
@@ -23,23 +24,25 @@ class MenuItem {
     required this.availability,
     required this.status,
     this.imageUrl,
+    this.scheduleDate,
   });
 
   factory MenuItem.fromJson(Map<String, dynamic> json) {
     return MenuItem(
-      id: json['id'] as int,
-      categoryId: json['category_id'] as int,
-      restaurantId: json['restaurant_id'] as int,
-      name: json['name'] as String,
+      id: json['id'] as int? ?? 0,
+      categoryId: json['category_id'] as int? ?? 0,
+      restaurantId: json['restaurant_id'] as int? ?? 0,
+      name: json['name'] as String? ?? 'Unnamed Item',
       description: json['description'] as String? ?? '',
-      price: (json['price'] as num).toDouble(),
+      price: (json['price'] as num? ?? 0.0).toDouble(),
       discountPrice: (json['discount_price'] as num? ?? 0.0).toDouble(),
       vegType: json['veg_type'] as String? ?? 'VEG',
       availability: (json['availability'] is int) 
           ? (json['availability'] as int) == 1 
           : (json['availability'] as bool? ?? true),
       status: json['status'] as String? ?? 'active',
-      imageUrl: json['image_url'] as String?,
+      imageUrl: json['imageUrl'] as String? ?? json['image_url'] as String?,
+      scheduleDate: json['schedule_date'] as String?,
     );
   }
 
@@ -56,6 +59,7 @@ class MenuItem {
       'availability': availability ? 1 : 0,
       'status': status,
       'image_url': imageUrl,
+      'schedule_date': scheduleDate,
     };
   }
 }

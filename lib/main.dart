@@ -15,7 +15,11 @@ import 'features/tiffin/presentation/screens/restaurant_dashboard_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
+  try {
+    await Firebase.initializeApp();
+  } catch (e) {
+    debugPrint('Firebase initialization failed: $e');
+  }
 
   // Initialize FCM Push Notifications
   try {

@@ -50,7 +50,50 @@ class RestaurantStateProvider extends ChangeNotifier {
   int get totalItemsCount => menuItems.length;
   int get activeItemsCount => menuItems.where((i) => i.availability).length;
   int get categoriesCount => categories.length;
-  int get addonsCount => 0;
+
+  MenuCategory? get addonsCategory {
+    try {
+      return categories.firstWhere(
+        (c) => c.name.toLowerCase().contains('add-on') || c.name.toLowerCase().contains('addon'),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  int get addonsCount {
+    final cat = addonsCategory;
+    if (cat == null) return 0;
+    return menuItems.where((item) => item.categoryId == cat.id).length;
+  }
+
+  List<Map<String, dynamic>> get todayAddons {
+    final cat = addonsCategory;
+    if (cat == null) return [];
+    return menuItems.where((item) => item.categoryId == cat.id).map((item) => {
+      'id': item.id,
+      'title': item.name,
+      'price': item.price,
+      'isVeg': item.vegType == 'VEG' || item.vegType == 'JAIN',
+      'isActiveToday': item.availability,
+      'availableQty': item.availability ? 50 : 0,
+      'totalQty': 50,
+    }).toList();
+  }
+
+  List<Map<String, dynamic>> get tomorrowAddons {
+    final cat = addonsCategory;
+    if (cat == null) return [];
+    return menuItems.where((item) => item.categoryId == cat.id).map((item) => {
+      'id': item.id,
+      'title': item.name,
+      'price': item.price,
+      'isVeg': item.vegType == 'VEG' || item.vegType == 'JAIN',
+      'isActiveTomorrow': item.availability,
+      'availableQty': item.availability ? 50 : 0,
+      'totalQty': 50,
+    }).toList();
+  }
 
   List<Map<String, dynamic>> get menuItemsMap {
     return menuItems.map((item) {
@@ -86,7 +129,16 @@ class RestaurantStateProvider extends ChangeNotifier {
   }
 
   List<Map<String, dynamic>> get todayMeals {
-    return menuItems.map((item) => {
+    final DateTime now = DateTime.now();
+    final String todayDmy = '${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year}';
+    final String todayYmd = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+
+    final addonCat = addonsCategory;
+    final meals = addonCat == null 
+        ? menuItems.where((item) => item.scheduleDate == null || item.scheduleDate!.isEmpty || item.scheduleDate == todayDmy || item.scheduleDate == todayYmd)
+        : menuItems.where((item) => item.categoryId != addonCat.id && (item.scheduleDate == null || item.scheduleDate!.isEmpty || item.scheduleDate == todayDmy || item.scheduleDate == todayYmd));
+
+    return meals.map((item) => {
       'title': item.name,
       'price': item.price,
       'gst': '5%',
@@ -99,8 +151,16 @@ class RestaurantStateProvider extends ChangeNotifier {
   }
 
   List<Map<String, dynamic>> get tomorrowMeals {
-    // Tomorrow meals are represented as scheduled active items
-    return menuItems.where((item) => item.availability).map((item) => {
+    final DateTime tom = DateTime.now().add(const Duration(days: 1));
+    final String tomDmy = '${tom.day.toString().padLeft(2, '0')}/${tom.month.toString().padLeft(2, '0')}/${tom.year}';
+    final String tomYmd = '${tom.year}-${tom.month.toString().padLeft(2, '0')}-${tom.day.toString().padLeft(2, '0')}';
+
+    final addonCat = addonsCategory;
+    final meals = addonCat == null
+        ? menuItems.where((item) => item.scheduleDate == tomDmy || item.scheduleDate == tomYmd)
+        : menuItems.where((item) => item.categoryId != addonCat.id && (item.scheduleDate == tomDmy || item.scheduleDate == tomYmd));
+
+    return meals.map((item) => {
       'title': item.name,
       'price': item.price,
       'availableQty': 50,
@@ -261,8 +321,8 @@ class RestaurantStateProvider extends ChangeNotifier {
       'description': 'Serving fresh today.',
       'price': price.toString(),
       'veg_type': isVeg ? 'VEG' : 'NON_VEG',
-      'availability': 'true',
-      'status': 'active',
+      'availability': '1',
+      'status': 'Active',
     });
   }
 
@@ -314,7 +374,7 @@ class RestaurantStateProvider extends ChangeNotifier {
       'meal_type': mealType,
       'taxes_and_disc': taxes,
       'is_popular': false,
-      'status': 'active',
+      'status': 'Active',
     });
     subscriptionPlans = await _restaurantRepository.getPlans();
     notifyListeners();
@@ -348,6 +408,60 @@ class RestaurantStateProvider extends ChangeNotifier {
       notifyListeners();
     } catch (e) {
       _setError(e.toString());
+    }
+  }
+
+  // --- ADDON MANAGEMENT ACTIONS ---
+
+  Future<int> _getOrCreateAddonsCategoryId() async {
+    final cat = addonsCategory;
+    if (cat != null) {
+      return cat.id;
+    }
+    // Create Category named "Add-ons"
+    await createCategory('Add-ons', 'Extra side dishes and beverages', 'active');
+    final newCat = addonsCategory;
+    return newCat?.id ?? 1;
+  }
+
+  Future<void> addAddon(String title, double price, int qty, bool isVeg) async {
+    _setLoading(true);
+    try {
+      final categoryId = await _getOrCreateAddonsCategoryId();
+      await addMenuItem({
+        'category_id': categoryId.toString(),
+        'restaurant_id': profile?.id.toString() ?? '1',
+        'name': title,
+        'description': 'Add-on item',
+        'price': price.toString(),
+        'veg_type': isVeg ? 'VEG' : 'NON_VEG',
+        'availability': '1',
+        'status': 'Active',
+      });
+    } catch (e) {
+      _setError(e.toString());
+      rethrow;
+    }
+  }
+
+  Future<void> toggleAddonActiveToday(String title) async {
+    final index = menuItems.indexWhere((item) => item.name == title);
+    if (index >= 0) {
+      await toggleMenuItemActive(menuItems[index]);
+    }
+  }
+
+  Future<void> toggleAddonActiveTomorrow(String title) async {
+    final index = menuItems.indexWhere((item) => item.name == title);
+    if (index >= 0) {
+      await toggleMenuItemActive(menuItems[index]);
+    }
+  }
+
+  Future<void> deleteAddon(String title) async {
+    final index = menuItems.indexWhere((item) => item.name == title);
+    if (index >= 0) {
+      await deleteMenuItem(menuItems[index].id);
     }
   }
 }

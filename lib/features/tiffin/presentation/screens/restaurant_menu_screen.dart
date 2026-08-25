@@ -118,8 +118,8 @@ class _RestaurantMenuScreenState extends State<RestaurantMenuScreen> {
                       'description': desc,
                       'price': price.toString(),
                       'veg_type': _dialogIsVeg ? 'VEG' : 'NON_VEG',
-                      'availability': 'true',
-                      'status': 'active',
+                      'availability': '1',
+                      'status': 'Active',
                     });
                     Navigator.pop(context);
                     ScaffoldMessenger.of(context).showSnackBar(

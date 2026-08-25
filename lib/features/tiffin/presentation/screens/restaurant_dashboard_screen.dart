@@ -3,7 +3,7 @@ import '../bloc/restaurant_state_provider.dart';
 import 'restaurant_home_screen.dart';
 import 'restaurant_menu_screen.dart';
 import 'restaurant_plans_screen.dart';
-import 'restaurant_today_meal_screen.dart';
+import 'restaurant_orders_screen.dart';
 import 'restaurant_profile_screen.dart';
 
 class RestaurantStateScope extends InheritedNotifier<RestaurantStateProvider> {
@@ -13,10 +13,16 @@ class RestaurantStateScope extends InheritedNotifier<RestaurantStateProvider> {
     required super.child,
   });
 
-  static RestaurantStateProvider of(BuildContext context) {
-    final scope = context.dependOnInheritedWidgetOfExactType<RestaurantStateScope>();
-    assert(scope != null, 'No RestaurantStateScope found in context');
-    return scope!.notifier!;
+  static RestaurantStateProvider of(BuildContext context, {bool listen = true}) {
+    if (listen) {
+      final scope = context.dependOnInheritedWidgetOfExactType<RestaurantStateScope>();
+      assert(scope != null, 'No RestaurantStateScope found in context');
+      return scope!.notifier!;
+    } else {
+      final element = context.getElementForInheritedWidgetOfExactType<RestaurantStateScope>();
+      assert(element != null, 'No RestaurantStateScope found in context');
+      return (element!.widget as RestaurantStateScope).notifier!;
+    }
   }
 }
 
@@ -54,7 +60,7 @@ class RestaurantDashboardScreenState extends State<RestaurantDashboardScreen> {
     const RestaurantHomeScreen(),
     const RestaurantMenuScreen(),
     const RestaurantPlansScreen(),
-    const RestaurantTodayMealScreen(),
+    const RestaurantOrdersScreen(),
     const RestaurantProfileScreen(),
   ];
 

@@ -25,10 +25,10 @@ class SubscriptionPlan {
 
   factory SubscriptionPlan.fromJson(Map<String, dynamic> json) {
     return SubscriptionPlan(
-      id: json['id'] as int,
-      restaurantId: json['restaurant_id'] as int,
-      title: json['title'] as String,
-      price: (json['price'] as num).toDouble(),
+      id: json['id'] as int? ?? 0,
+      restaurantId: json['restaurant_id'] as int? ?? 0,
+      title: json['title'] as String? ?? 'Subscription Plan',
+      price: (json['price'] as num? ?? 0.0).toDouble(),
       duration: json['duration'] as String? ?? 'Monthly',
       mealsCount: json['meals_count'] as int? ?? 30,
       mealType: json['meal_type'] as String? ?? 'Veg / Non-Veg',

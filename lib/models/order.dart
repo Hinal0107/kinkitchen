@@ -33,14 +33,14 @@ class Order {
 
   factory Order.fromJson(Map<String, dynamic> json) {
     return Order(
-      id: json['id'] as int,
-      orderNumber: json['order_number'] as String,
-      restaurantId: json['restaurant_id'] as int,
-      customerId: json['customer_id'] as int,
-      subtotal: (json['subtotal'] as num).toDouble(),
+      id: json['id'] as int? ?? 0,
+      orderNumber: json['order_number'] as String? ?? '',
+      restaurantId: json['restaurant_id'] as int? ?? 0,
+      customerId: json['customer_id'] as int? ?? 0,
+      subtotal: (json['subtotal'] as num? ?? 0.0).toDouble(),
       tax: (json['tax'] as num? ?? 0.0).toDouble(),
       deliveryFee: (json['delivery_fee'] as num? ?? 0.0).toDouble(),
-      total: (json['total'] as num).toDouble(),
+      total: (json['total'] as num? ?? 0.0).toDouble(),
       status: json['status'] as String? ?? 'PENDING',
       paymentStatus: json['payment_status'] as String? ?? 'PENDING',
       deliveryAddress: json['delivery_address'] as String? ?? '',

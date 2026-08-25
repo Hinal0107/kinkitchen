@@ -10,12 +10,15 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  bool _hasFetchedInitialData = false;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     // Auto-fetch restaurants from API when screen loads
     final state = TiffinStateScope.of(context);
-    if (state.restaurants.isEmpty && !state.isLoading && state.errorMessage == null) {
+    if (!_hasFetchedInitialData && !state.isLoading && state.errorMessage == null) {
+      _hasFetchedInitialData = true;
       Future.microtask(() => state.fetchRestaurants());
     }
   }
