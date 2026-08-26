@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import '../../../../core/widgets/food_image.dart';
+import '../../../../models/menu_category.dart';
 import '../bloc/restaurant_state_provider.dart';
 import 'restaurant_dashboard_screen.dart';
+import 'restaurant_add_category_screen.dart';
 
 class RestaurantMenuScreen extends StatefulWidget {
   const RestaurantMenuScreen({super.key});
@@ -11,133 +13,50 @@ class RestaurantMenuScreen extends StatefulWidget {
 }
 
 class _RestaurantMenuScreenState extends State<RestaurantMenuScreen> {
-  String _selectedCategory = 'All';
-  
-  // Dialog Controllers
-  final _titleController = TextEditingController();
-  final _priceController = TextEditingController();
-  final _descController = TextEditingController();
-  String _dialogCategory = 'Lunch';
-  bool _dialogIsVeg = true;
+  bool _hasFetchedData = false;
+  bool _isSearching = false;
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
 
   @override
   void dispose() {
-    _titleController.dispose();
-    _priceController.dispose();
-    _descController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
-  void _showAddItemDialog(RestaurantStateProvider state) {
-    _titleController.clear();
-    _priceController.clear();
-    _descController.clear();
-    _dialogCategory = 'Lunch';
-    _dialogIsVeg = true;
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final state = RestaurantStateScope.of(context);
+    if (!_hasFetchedData && !state.isLoading) {
+      _hasFetchedData = true;
+      Future.microtask(() {
+        state.fetchCategories();
+      });
+    }
+  }
 
-    showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) {
-          const Color merchantGreen = Color(0xFF00A859);
-          
-          return AlertDialog(
-            title: const Text('Add Menu Item'),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  TextField(
-                    controller: _titleController,
-                    decoration: const InputDecoration(labelText: 'Item Name', hintText: 'e.g. Kadai Paneer'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _priceController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'Price (₹)', hintText: 'e.g. 150'),
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    value: _dialogCategory,
-                    decoration: const InputDecoration(labelText: 'Category'),
-                    items: ['Breakfast', 'Lunch', 'Dinner'].map((cat) {
-                      return DropdownMenuItem(value: cat, child: Text(cat));
-                    }).toList(),
-                    onChanged: (val) {
-                      if (val != null) {
-                        setDialogState(() {
-                          _dialogCategory = val;
-                        });
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('Is Vegetarian?', style: TextStyle(fontWeight: FontWeight.bold)),
-                      Switch(
-                        activeColor: merchantGreen,
-                        value: _dialogIsVeg,
-                        onChanged: (val) {
-                          setDialogState(() {
-                            _dialogIsVeg = val;
-                          });
-                        },
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _descController,
-                    maxLines: 2,
-                    decoration: const InputDecoration(labelText: 'Description', hintText: 'Brief dish description...'),
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
-              ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: merchantGreen, foregroundColor: Colors.white),
-                onPressed: () {
-                  final String title = _titleController.text.trim();
-                  final double price = double.tryParse(_priceController.text) ?? 0.0;
-                  final String desc = _descController.text.trim();
-
-                  if (title.isNotEmpty && price > 0) {
-                    state.addMenuItem({
-                      'category_id': state.categories.isNotEmpty ? state.categories.first.id.toString() : '1',
-                      'restaurant_id': state.profile?.id.toString() ?? '1',
-                      'name': title,
-                      'description': desc,
-                      'price': price.toString(),
-                      'veg_type': _dialogIsVeg ? 'VEG' : 'NON_VEG',
-                      'availability': '1',
-                      'status': 'Active',
-                    });
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('$title added to Menu!')),
-                    );
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Please fill all fields correctly.')),
-                    );
-                  }
-                },
-                child: const Text('Add Item'),
-              ),
-            ],
-          );
-        },
+  void _openAddCategoryScreen(RestaurantStateProvider state) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => RestaurantAddCategoryScreen(stateProvider: state),
       ),
     );
+    await state.fetchCategories();
+  }
+
+  /// Returns regular categories (excluding add-on or special system categories if needed)
+  List<MenuCategory> _getDisplayCategories(RestaurantStateProvider state) {
+    return state.categories.where((cat) {
+      final name = cat.name.toLowerCase();
+      return !name.contains('add-on') &&
+          !name.contains('addon') &&
+          name != 'today' &&
+          name != "today's meals" &&
+          name != 'tomorrow' &&
+          name != "tomorrow's meals";
+    }).toList();
   }
 
   @override
@@ -145,11 +64,12 @@ class _RestaurantMenuScreenState extends State<RestaurantMenuScreen> {
     final state = RestaurantStateScope.of(context);
     const Color merchantGreen = Color(0xFF00A859);
 
-    final List<String> categories = ['All', 'Breakfast', 'Lunch', 'Dinner'];
-
-    // Filtered menu list
-    final filteredMenuItems = state.menuItemsMap.where((item) {
-      return _selectedCategory == 'All' || item['category'] == _selectedCategory;
+    final displayCategories = _getDisplayCategories(state);
+    final filteredCategories = displayCategories.where((cat) {
+      if (_searchQuery.isEmpty) return true;
+      final query = _searchQuery.toLowerCase();
+      return cat.name.toLowerCase().contains(query) ||
+          cat.description.toLowerCase().contains(query);
     }).toList();
 
     return Scaffold(
@@ -157,251 +77,327 @@ class _RestaurantMenuScreenState extends State<RestaurantMenuScreen> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        title: const Text(
-          'Menu',
-          style: TextStyle(color: Color(0xFF1F2937), fontWeight: FontWeight.bold, fontSize: 20),
-        ),
+        title: _isSearching
+            ? TextField(
+                controller: _searchController,
+                autofocus: true,
+                style: const TextStyle(color: Color(0xFF1F2937), fontSize: 16),
+                decoration: const InputDecoration(
+                  hintText: 'Search categories...',
+                  hintStyle: TextStyle(color: Color(0xFF9CA3AF), fontSize: 15),
+                  border: InputBorder.none,
+                ),
+                onChanged: (val) {
+                  setState(() {
+                    _searchQuery = val.trim();
+                  });
+                },
+              )
+            : const Text(
+                'Menu Categories',
+                style: TextStyle(
+                  color: Color(0xFF1F2937),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 20,
+                ),
+              ),
         centerTitle: true,
         actions: [
           IconButton(
-            icon: const Icon(Icons.search, color: Color(0xFF4B5563)),
-            onPressed: () {},
+            icon: Icon(
+              _isSearching ? Icons.close : Icons.search,
+              color: const Color(0xFF4B5563),
+            ),
+            onPressed: () {
+              setState(() {
+                if (_isSearching) {
+                  _isSearching = false;
+                  _searchQuery = '';
+                  _searchController.clear();
+                } else {
+                  _isSearching = true;
+                }
+              });
+            },
           ),
         ],
       ),
-      body: Column(
-        children: [
-          // 1. Stats Grid
-          Container(
-            color: Colors.white,
-            padding: const EdgeInsets.all(16),
-            child: GridView.count(
-              crossAxisCount: 4,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              crossAxisSpacing: 8,
-              children: [
-                _buildStatCell('${state.totalItemsCount}', 'Total items'),
-                _buildStatCell('${state.activeItemsCount}', 'Active items'),
-                _buildStatCell('${state.categoriesCount}', 'Categories'),
-                _buildStatCell('${state.addonsCount}', 'Add-ons'),
-              ],
-            ),
-          ),
-          
-          // 2. Buttons Row
-          Container(
-            color: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: merchantGreen,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                    onPressed: () => _showAddItemDialog(state),
-                    icon: const Icon(Icons.add, size: 16),
-                    label: const Text('Add Menu Item', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: merchantGreen,
-                      side: const BorderSide(color: merchantGreen),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Category creator opened')),
-                      );
-                    },
-                    icon: const Icon(Icons.grid_view_outlined, size: 16),
-                    label: const Text('Add Category', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // 3. Category Filter tags
-          Container(
-            height: 52,
-            color: Colors.white,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              physics: const BouncingScrollPhysics(),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              itemCount: categories.length,
-              itemBuilder: (context, index) {
-                final cat = categories[index];
-                final isSelected = _selectedCategory == cat;
-                return GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _selectedCategory = cat;
-                    });
-                  },
-                  child: Container(
-                    margin: const EdgeInsets.only(right: 10),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: isSelected ? merchantGreen : const Color(0xFFF3F4F6),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      cat,
-                      style: TextStyle(
-                        color: isSelected ? Colors.white : const Color(0xFF4B5563),
-                        fontSize: 13,
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: merchantGreen,
+        foregroundColor: Colors.white,
+        onPressed: () => _openAddCategoryScreen(state),
+        child: const Icon(Icons.add),
+      ),
+      body: displayCategories.isEmpty
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32.0),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: merchantGreen.withOpacity(0.06),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.category_outlined,
+                        size: 52,
+                        color: merchantGreen,
                       ),
                     ),
+                    const SizedBox(height: 20),
+                    const Text(
+                      'No Categories Added Yet',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1F2937),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Tap the Floating "+" button below to add your first menu category. Categories will be saved to your menu_categories table.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Color(0xFF6B7280),
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          : filteredCategories.isEmpty
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32.0),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(
+                          Icons.search_off_outlined,
+                          size: 52,
+                          color: Color(0xFF9CA3AF),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'No Category Matching "$_searchQuery"',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF1F2937),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextButton(
+                          onPressed: () {
+                            setState(() {
+                              _searchQuery = '';
+                              _searchController.clear();
+                            });
+                          },
+                          child: const Text(
+                            'Clear Search',
+                            style: TextStyle(color: merchantGreen, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                );
-              },
-            ),
-          ),
+                )
+              : ListView.builder(
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.all(16),
+                  itemCount: filteredCategories.length,
+                  itemBuilder: (context, index) {
+                    final category = filteredCategories[index];
+                      final bool isActive = category.status.toUpperCase() == 'ACTIVE';
 
-          // 4. Menu List
-          Expanded(
-            child: ListView.builder(
-              physics: const BouncingScrollPhysics(),
-              padding: const EdgeInsets.all(16),
-              itemCount: filteredMenuItems.length,
-              itemBuilder: (context, index) {
-                final item = filteredMenuItems[index];
-                final String title = item['title'];
-                final double price = item['price'];
-                final bool isVeg = item['isVeg'];
-                final bool isActive = item['isActive'];
-                final String category = item['category'];
-                final String desc = item['description'];
-
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 16),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFFF3F4F6), width: 1),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      FoodImage(title: title, width: 80, height: 80, borderRadius: 12),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 16),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: const Color(0xFFF3F4F6),
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
-                              children: [
-                                _buildVegIndicator(isVeg),
-                                const SizedBox(width: 6),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFF3F4F6),
-                                    borderRadius: BorderRadius.circular(4),
+                            FoodImage(
+                              title: category.name,
+                              imageUrl: category.imageUrl,
+                              width: 80,
+                              height: 80,
+                              borderRadius: 12,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFF3F4F6),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: const Text(
+                                      'Category',
+                                      style: TextStyle(
+                                        color: Color(0xFF6B7280),
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
                                   ),
-                                  child: Text(
-                                    category,
-                                    style: const TextStyle(color: Color(0xFF6B7280), fontSize: 10, fontWeight: FontWeight.bold),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    category.name,
+                                    style: const TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF1F2937),
+                                    ),
                                   ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              title,
-                              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF1F2937)),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              desc,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
-                            ),
-                            const SizedBox(height: 8),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  '₹${price.toStringAsFixed(2)} + GST',
-                                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: merchantGreen),
-                                ),
-                                Switch(
-                                  activeColor: merchantGreen,
-                                  value: isActive,
-                                  onChanged: (val) {
-                                    state.toggleMenuItemActiveByName(title);
-                                  },
-                                ),
-                              ],
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    category.description.isNotEmpty
+                                        ? category.description
+                                        : 'No summary provided',
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: Color(0xFF6B7280),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        isActive ? 'Active' : 'Inactive',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                          color: isActive
+                                              ? merchantGreen
+                                              : Colors.grey,
+                                        ),
+                                      ),
+                                      Row(
+                                        children: [
+                                          Switch(
+                                            activeColor: merchantGreen,
+                                            value: isActive,
+                                            onChanged: (val) {
+                                              state.updateCategory(
+                                                category.id,
+                                                category.name,
+                                                category.description,
+                                                val ? 'ACTIVE' : 'INACTIVE',
+                                              );
+                                            },
+                                          ),
+                                          GestureDetector(
+                                            onTap: () async {
+                                              await Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                  builder: (context) => RestaurantAddCategoryScreen(
+                                                    stateProvider: state,
+                                                    existingCategory: category,
+                                                    isEdit: true,
+                                                  ),
+                                                ),
+                                              );
+                                              await state.fetchCategories();
+                                            },
+                                            child: Container(
+                                              padding: const EdgeInsets.all(4),
+                                              margin: const EdgeInsets.only(right: 6),
+                                              child: const Icon(
+                                                Icons.edit_outlined,
+                                                color: Color(0xFF4B5563),
+                                                size: 20,
+                                              ),
+                                            ),
+                                          ),
+                                          GestureDetector(
+                                            onTap: () => _confirmDeleteCategory(
+                                              context,
+                                              state,
+                                              category.id,
+                                              category.name,
+                                            ),
+                                            child: Container(
+                                              padding: const EdgeInsets.all(4),
+                                              child: const Icon(
+                                                Icons.delete_outline,
+                                                color: Color(0xFFEF4444),
+                                                size: 20,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
                             ),
                           ],
                         ),
-                      ),
-                    ],
+                      );
+                    },
                   ),
+    );
+  }
+
+  void _confirmDeleteCategory(
+    BuildContext context,
+    RestaurantStateProvider state,
+    int id,
+    String name,
+  ) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Category'),
+        content: Text('Are you sure you want to delete "$name"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await state.deleteCategory(id);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Category "$name" deleted!')),
                 );
-              },
+              }
+            },
+            child: const Text(
+              'Delete',
+              style: TextStyle(color: Color(0xFFEF4444)),
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildStatCell(String count, String label) {
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFFF9FAFB),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-      alignment: Alignment.center,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            count,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1F2937)),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 9, color: Color(0xFF9CA3AF), fontWeight: FontWeight.w600),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildVegIndicator(bool isVeg) {
-    final Color color = isVeg ? const Color(0xFF00A859) : const Color(0xFF8B0000);
-    return Container(
-      width: 14,
-      height: 14,
-      decoration: BoxDecoration(
-        border: Border.all(color: color, width: 1.2),
-        borderRadius: BorderRadius.circular(2),
-      ),
-      alignment: Alignment.center,
-      child: Container(
-        width: 6,
-        height: 6,
-        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
       ),
     );
   }

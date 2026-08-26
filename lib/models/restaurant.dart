@@ -12,7 +12,7 @@ class Restaurant {
   final String openingTime;
   final String closingTime;
   final String? logoUrl;
-  final String status; // 'active', 'inactive'
+  final String status;
 
   Restaurant({
     required this.id,
@@ -32,21 +32,28 @@ class Restaurant {
   });
 
   factory Restaurant.fromJson(Map<String, dynamic> json) {
+    int toInt(dynamic val) {
+      if (val is int) return val;
+      if (val is num) return val.toInt();
+      if (val is String) return int.tryParse(val) ?? 0;
+      return 0;
+    }
+
     return Restaurant(
-      id: json['id'] as int? ?? 0,
-      name: json['name'] as String? ?? 'Unnamed Restaurant',
-      email: json['email'] as String? ?? '',
-      phone: json['phone'] as String? ?? '',
-      description: json['description'] as String? ?? '',
-      address: json['address'] as String? ?? '',
-      city: json['city'] as String? ?? '',
-      state: json['state'] as String? ?? '',
-      country: json['country'] as String? ?? '',
-      pincode: json['pincode'] as String? ?? '',
-      openingTime: json['opening_time'] as String? ?? '',
-      closingTime: json['closing_time'] as String? ?? '',
-      logoUrl: json['logoUrl'] as String? ?? json['logo_url'] as String?,
-      status: json['status'] as String? ?? 'active',
+      id: toInt(json['id']),
+      name: json['name']?.toString() ?? 'Unnamed Restaurant',
+      email: json['email']?.toString() ?? '',
+      phone: json['phone']?.toString() ?? '',
+      description: json['description']?.toString() ?? '',
+      address: json['address']?.toString() ?? '',
+      city: json['city']?.toString() ?? '',
+      state: json['state']?.toString() ?? '',
+      country: json['country']?.toString() ?? '',
+      pincode: json['pincode']?.toString() ?? '',
+      openingTime: json['opening_time']?.toString() ?? '',
+      closingTime: json['closing_time']?.toString() ?? '',
+      logoUrl: json['logoUrl']?.toString() ?? json['logo_url']?.toString() ?? json['logo']?.toString(),
+      status: json['status']?.toString() ?? 'ACTIVE',
     );
   }
 

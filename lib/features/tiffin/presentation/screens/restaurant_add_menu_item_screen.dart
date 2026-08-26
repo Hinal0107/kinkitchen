@@ -2,12 +2,22 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../../core/errors/failure.dart';
+import '../../../../core/widgets/food_image.dart';
 import '../bloc/restaurant_state_provider.dart';
 
 class RestaurantAddMenuItemScreen extends StatefulWidget {
   final RestaurantStateProvider stateProvider;
+  final String? initialMealType;
+  final Map<String, dynamic>? existingMeal;
+  final bool isEdit;
 
-  const RestaurantAddMenuItemScreen({super.key, required this.stateProvider});
+  const RestaurantAddMenuItemScreen({
+    super.key,
+    required this.stateProvider,
+    this.initialMealType,
+    this.existingMeal,
+    this.isEdit = false,
+  });
 
   @override
   State<RestaurantAddMenuItemScreen> createState() => _RestaurantAddMenuItemScreenState();
@@ -21,34 +31,150 @@ class _RestaurantAddMenuItemScreenState extends State<RestaurantAddMenuItemScree
   final _descriptionController = TextEditingController();
   final _regularPriceController = TextEditingController();
   final _discountPriceController = TextEditingController();
-  final _sortOrderController = TextEditingController(text: '1');
   DateTime _selectedDate = DateTime.now();
   late final TextEditingController _dateController;
-  int? _selectedAutofillItemId;
 
-  // Dropdown States
-  int? _selectedCategoryId;
-  String _selectedDietaryType = 'Vegetarian';
-  String _selectedAvailability = 'In Stock';
+  // Dropdown & Selection States
+  late String _selectedMealType;
+  final Set<int> _selectedAddonIds = {};
+  String _selectedDietaryType = 'Vegetarian (VEG)';
+  String _selectedAvailability = 'Available';
   String? _selectedImageName;
+  String? _existingImageUrl;
   File? _pickedImageFile;
+  int? _selectedCategoryId;
 
   final ImagePicker _picker = ImagePicker();
   bool _isLoading = false;
 
-  Future<void> _selectDate() async {
+  // Helper methods to normalize dropdown values safely
+  String _normalizeDietaryType(String? val) {
+    if (val == null || val.isEmpty) return 'Vegetarian (VEG)';
+    final s = val.toUpperCase();
+    if (s.contains('JAIN')) return 'Jain (JAIN)';
+    if (s.contains('VEGAN')) return 'Vegan (VEGAN)';
+    if (s.contains('NON')) return 'Non-Vegetarian (NON-VEG)';
+    if (s.contains('VEG') || s.contains('VEGETARIAN')) return 'Vegetarian (VEG)';
+    return 'Vegetarian (VEG)';
+  }
+
+  String _normalizeAvailability(String? val) {
+    if (val == null || val.isEmpty) return 'Available';
+    final s = val.toUpperCase();
+    if (s.contains('OUT') || s.contains('UNAVAILABLE') || s == '0' || s == 'FALSE') {
+      return 'Out of Stock';
+    }
+    return 'Available';
+  }
+
+  String _normalizeMealType(String? val) {
+    if (val == null || val.isEmpty) return "Today's Meal";
+    final s = val.toUpperCase();
+    if (s.contains('TOMORROW')) return "Tomorrow's Meal";
+    if (s.contains('WEEKLY')) return "Weekly Meal";
+    if (s.contains('GENERAL') || s.contains('MENU')) return "General Menu";
+    return "Today's Meal";
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedMealType = _normalizeMealType(widget.initialMealType);
+
+    if (widget.isEdit && widget.existingMeal != null) {
+      final meal = widget.existingMeal!;
+      _nameController.text = meal['title']?.toString() ?? meal['name']?.toString() ?? '';
+      _descriptionController.text = meal['description']?.toString() ?? '';
+      
+      final numPrice = meal['price'];
+      if (numPrice != null) {
+        final pVal = (numPrice is num) ? numPrice.toDouble() : (double.tryParse(numPrice.toString()) ?? 0.0);
+        if (pVal > 0) {
+          _regularPriceController.text = pVal.toStringAsFixed(2);
+        }
+      }
+
+      final dynamic rawDisc = meal['discount_price'] ?? meal['discountPrice'];
+      if (rawDisc != null) {
+        final dVal = (rawDisc is num) ? rawDisc.toDouble() : (double.tryParse(rawDisc.toString()) ?? 0.0);
+        if (dVal > 0) {
+          _discountPriceController.text = dVal.toStringAsFixed(2);
+        }
+      }
+
+      final bool isVeg = meal['isVeg'] ?? (meal['veg_type'] == 'VEG' || meal['veg_type'] == 'JAIN' || meal['veg_type'] == 'Vegetarian');
+      final String rawVType = meal['veg_type']?.toString() ?? (isVeg ? 'VEG' : 'NON_VEG');
+      _selectedDietaryType = _normalizeDietaryType(rawVType);
+
+      final dynamic rawAvail = meal['availability'] ?? meal['isActive'];
+      _selectedAvailability = _normalizeAvailability(rawAvail?.toString());
+
+      final String? imgUrl = meal['image']?.toString() ?? meal['imageUrl']?.toString();
+      if (imgUrl != null && imgUrl.isNotEmpty) {
+        _existingImageUrl = imgUrl;
+        _selectedImageName = 'Existing image attached';
+      }
+
+      final String? dateVal = meal['date']?.toString();
+      if (dateVal != null && dateVal.isNotEmpty) {
+        if (dateVal.contains('/')) {
+          _dateController = TextEditingController(text: dateVal);
+        } else {
+          try {
+            final dt = DateTime.parse(dateVal);
+            _selectedDate = dt;
+            _dateController = TextEditingController(
+              text: '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}',
+            );
+          } catch (_) {
+            _dateController = TextEditingController(text: dateVal);
+          }
+        }
+      } else {
+        final dateStr = '${_selectedDate.day.toString().padLeft(2, '0')}/${_selectedDate.month.toString().padLeft(2, '0')}/${_selectedDate.year}';
+        _dateController = TextEditingController(text: dateStr);
+      }
+    } else {
+      final dateStr = '${_selectedDate.day.toString().padLeft(2, '0')}/${_selectedDate.month.toString().padLeft(2, '0')}/${_selectedDate.year}';
+      _dateController = TextEditingController(text: dateStr);
+    }
+
+    if (widget.stateProvider.categories.isNotEmpty) {
+      _selectedCategoryId = widget.stateProvider.categories.first.id;
+    } else {
+      widget.stateProvider.fetchCategories().then((_) {
+        if (mounted && widget.stateProvider.categories.isNotEmpty) {
+          setState(() {
+            _selectedCategoryId = widget.stateProvider.categories.first.id;
+          });
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _descriptionController.dispose();
+    _regularPriceController.dispose();
+    _discountPriceController.dispose();
+    _dateController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _selectDate(BuildContext context) async {
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: _selectedDate,
-      firstDate: DateTime.now().subtract(const Duration(days: 30)),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2030),
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
             colorScheme: const ColorScheme.light(
               primary: Color(0xFFF15A22),
               onPrimary: Colors.white,
-              onSurface: Colors.black,
+              onSurface: Color(0xFF1F2937),
             ),
           ),
           child: child!,
@@ -127,71 +253,76 @@ class _RestaurantAddMenuItemScreenState extends State<RestaurantAddMenuItemScree
     );
   }
 
-  @override
-  void initState() {
-    super.initState();
-    final todayStr = '${_selectedDate.day.toString().padLeft(2, '0')}/${_selectedDate.month.toString().padLeft(2, '0')}/${_selectedDate.year}';
-    _dateController = TextEditingController(text: todayStr);
-    // Default to the first available category
-    if (widget.stateProvider.categories.isNotEmpty) {
-      _selectedCategoryId = widget.stateProvider.categories.first.id;
-    }
-  }
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _descriptionController.dispose();
-    _regularPriceController.dispose();
-    _discountPriceController.dispose();
-    _sortOrderController.dispose();
-    _dateController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _handleCreateItem() async {
+  Future<void> _handleSaveItem() async {
     if (_formKey.currentState!.validate()) {
-      if (_selectedCategoryId == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please select a category.')),
-        );
-        return;
-      }
-
       setState(() {
         _isLoading = true;
       });
 
       try {
-        final vegType = _selectedDietaryType == 'Vegetarian'
+        final vegType = _selectedDietaryType.contains('VEG') && !_selectedDietaryType.contains('NON')
             ? 'VEG'
-            : (_selectedDietaryType == 'Jain' ? 'JAIN' : 'NON_VEG');
+            : (_selectedDietaryType.contains('JAIN')
+                ? 'JAIN'
+                : (_selectedDietaryType.contains('VEGAN') ? 'VEGAN' : 'NON_VEG'));
 
-        final availability = _selectedAvailability == 'In Stock' ? '1' : '0';
+        final availability = (_selectedAvailability == 'In Stock' || _selectedAvailability == 'Available') ? '1' : '0';
+
+        final priceVal = double.tryParse(_regularPriceController.text.trim()) ?? 0.0;
+        final discountText = _discountPriceController.text.trim();
+        final discountVal = double.tryParse(discountText);
 
         final fields = {
-          'category_id': _selectedCategoryId.toString(),
+          'category_id': _selectedCategoryId?.toString() ?? '1',
           'restaurant_id': widget.stateProvider.profile?.id.toString() ?? '1',
           'name': _nameController.text.trim(),
           'description': _descriptionController.text.trim(),
-          'price': _regularPriceController.text.trim(),
-          'discount_price': _discountPriceController.text.trim().isEmpty 
-              ? '0.0' 
-              : _discountPriceController.text.trim(),
+          'price': priceVal.toStringAsFixed(2),
+          if (discountVal != null && discountVal > 0 && discountVal < priceVal)
+            'discount_price': discountVal.toStringAsFixed(2),
           'veg_type': vegType,
           'availability': availability,
-          'status': 'Active',
-          'sort_order': _sortOrderController.text.trim(),
-          'schedule_date': _dateController.text.trim(),
+          'status': 'ACTIVE',
         };
 
-        await widget.stateProvider.addMenuItem(fields, image: _pickedImageFile);
+        final String mealTypeBackend = _selectedMealType.contains('Tomorrow')
+            ? 'TOMORROW'
+            : (_selectedMealType.contains('Weekly') ? 'WEEKLY' : 'TODAY');
+
+        fields['date'] = _dateController.text.trim();
+        fields['meal_type'] = mealTypeBackend;
+        if (_selectedAddonIds.isNotEmpty) {
+          fields['addon_ids'] = _selectedAddonIds.join(',');
+        }
+
+        if (_selectedMealType == "General Menu") {
+          if (widget.isEdit && widget.existingMeal != null && widget.existingMeal!['id'] != null) {
+            final int itemId = widget.existingMeal!['id'];
+            await widget.stateProvider.updateMenuItem(itemId, fields, image: _pickedImageFile);
+          } else {
+            await widget.stateProvider.addMenuItem(fields, image: _pickedImageFile);
+          }
+        } else {
+          if (widget.isEdit && widget.existingMeal != null && widget.existingMeal!['id'] != null) {
+            final int mealId = widget.existingMeal!['id'];
+            await widget.stateProvider.updateDailyMeal(mealId, fields, image: _pickedImageFile);
+          } else {
+            await widget.stateProvider.addDailyMeal(fields, image: _pickedImageFile);
+          }
+        }
+
+        // Refresh state from API/database
+        await widget.stateProvider.fetchDailyMeals();
+        await widget.stateProvider.fetchMenuItems();
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('"${_nameController.text.trim()}" created successfully!')),
+            SnackBar(
+              content: Text(widget.isEdit ? 'Item updated successfully!' : 'Meal scheduled successfully!'),
+              backgroundColor: const Color(0xFF00A859),
+            ),
           );
-          Navigator.pop(context); // Go back to Home Screen
+          Navigator.pop(context);
         }
       } catch (e) {
         if (mounted) {
@@ -209,7 +340,7 @@ class _RestaurantAddMenuItemScreenState extends State<RestaurantAddMenuItemScree
           }
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Failed to create item:\n$errMsg'),
+              content: Text('Failed to save meal:\n$errMsg'),
               backgroundColor: Colors.red,
               duration: const Duration(seconds: 6),
             ),
@@ -225,339 +356,14 @@ class _RestaurantAddMenuItemScreenState extends State<RestaurantAddMenuItemScree
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    const Color brandOrange = Color(0xFFF15A22);
-    const Color inputLabelColor = Color(0xFF4B5563);
-
-    return Scaffold(
-      backgroundColor: const Color(0xFFF3F4F6),
-      appBar: AppBar(
-        title: const Text('Add Menu Item', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.black)),
-        centerTitle: true,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 0.5,
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          padding: const EdgeInsets.all(16.0),
-          child: Container(
-            padding: const EdgeInsets.all(20.0),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const Text(
-                    'Add New Menu Item',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1F2937)),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Autofill Dropdown Section
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFF7F5),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFFFFEAE5), width: 1),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Autofill from Menu Items',
-                          style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFFF15A22), fontSize: 13),
-                        ),
-                        const SizedBox(height: 6),
-                        DropdownButtonFormField<int>(
-                          isExpanded: true,
-                          value: _selectedAutofillItemId,
-                          hint: const Text('-- Choose Menu Item to Autofill --', style: TextStyle(fontSize: 13)),
-                          decoration: _buildInputDecoration('Choose Item'),
-                          items: widget.stateProvider.menuItems.map((item) {
-                            return DropdownMenuItem<int>(
-                              value: item.id,
-                              child: Text(item.name, style: const TextStyle(fontSize: 13)),
-                            );
-                          }).toList(),
-                          onChanged: (val) {
-                            if (val != null) {
-                              final selectedItem = widget.stateProvider.menuItems.firstWhere((item) => item.id == val);
-                              setState(() {
-                                _selectedAutofillItemId = val;
-                                _nameController.text = selectedItem.name;
-                                _descriptionController.text = selectedItem.description;
-                                _regularPriceController.text = selectedItem.price.toString();
-                                _discountPriceController.text = selectedItem.discountPrice.toString();
-                                _selectedCategoryId = selectedItem.categoryId;
-                                _selectedDietaryType = selectedItem.vegType == 'VEG' 
-                                    ? 'Vegetarian' 
-                                    : (selectedItem.vegType == 'JAIN' ? 'Jain' : 'Non-Vegetarian');
-                                _selectedAvailability = selectedItem.availability ? 'In Stock' : 'Out of Stock';
-                              });
-                            }
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Date to Schedule
-                  const Text('Date to Schedule', style: TextStyle(fontWeight: FontWeight.bold, color: inputLabelColor, fontSize: 13)),
-                  const SizedBox(height: 6),
-                  TextFormField(
-                    controller: _dateController,
-                    readOnly: true,
-                    onTap: _selectDate,
-                    decoration: _buildInputDecoration('dd/MM/yyyy').copyWith(
-                      suffixIcon: const Icon(Icons.calendar_today, color: brandOrange, size: 18),
-                    ),
-                    validator: (val) => val == null || val.trim().isEmpty ? 'Please select date' : null,
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Category Dropdown
-                  const Text('Category', style: TextStyle(fontWeight: FontWeight.bold, color: inputLabelColor, fontSize: 13)),
-                  const SizedBox(height: 6),
-                  DropdownButtonFormField<int>(
-                    value: _selectedCategoryId,
-                    decoration: _buildInputDecoration('Select Category'),
-                    items: widget.stateProvider.categories.map((cat) {
-                      return DropdownMenuItem<int>(
-                        value: cat.id,
-                        child: Text(cat.name),
-                      );
-                    }).toList(),
-                    onChanged: (val) {
-                      setState(() {
-                        _selectedCategoryId = val;
-                      });
-                    },
-                    validator: (val) => val == null ? 'Please select category' : null,
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Dish Name Input
-                  const Text('Dish Name', style: TextStyle(fontWeight: FontWeight.bold, color: inputLabelColor, fontSize: 13)),
-                  const SizedBox(height: 6),
-                  TextFormField(
-                    controller: _nameController,
-                    decoration: _buildInputDecoration('e.g. Special Gujarati Thali'),
-                    validator: (val) => val == null || val.trim().isEmpty ? 'Please enter dish name' : null,
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Description Input
-                  const Text('Description', style: TextStyle(fontWeight: FontWeight.bold, color: inputLabelColor, fontSize: 13)),
-                  const SizedBox(height: 6),
-                  TextFormField(
-                    controller: _descriptionController,
-                    maxLines: 3,
-                    decoration: _buildInputDecoration('e.g. Includes rotis, paneer shaak, sweet, and dal...'),
-                    validator: (val) => val == null || val.trim().isEmpty ? 'Please enter description' : null,
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Dish Image Choose File Mock
-                  const Text('Dish Image', style: TextStyle(fontWeight: FontWeight.bold, color: inputLabelColor, fontSize: 13)),
-                  const SizedBox(height: 6),
-                  InkWell(
-                    onTap: () => _showImageSourceActionSheet(context),
-                    borderRadius: BorderRadius.circular(8),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: const Color(0xFFD1D5DB)),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        children: [
-                          // Container(
-                          //   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          //   decoration: BoxDecoration(
-                          //     color: const Color(0xFFE5E7EB),
-                          //     borderRadius: BorderRadius.circular(4),
-                          //     border: Border.all(color: const Color(0xFFD1D5DB)),
-                          //   ),
-                          //   child: const Text(
-                          //     'Choose file',
-                          //     style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black),
-                          //   ),
-                          // ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              _selectedImageName ?? 'No file chosen',
-                              style: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 13),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          const Icon(Icons.camera_alt_outlined, color: Color(0xFF9CA3AF), size: 20),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Regular & Discount Prices
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Regular Price (₹)', style: TextStyle(fontWeight: FontWeight.bold, color: inputLabelColor, fontSize: 13)),
-                            const SizedBox(height: 6),
-                            TextFormField(
-                              controller: _regularPriceController,
-                              keyboardType: TextInputType.number,
-                              decoration: _buildInputDecoration('10.00'),
-                              validator: (val) {
-                                if (val == null || val.trim().isEmpty) return 'Required';
-                                if (double.tryParse(val) == null) return 'Invalid price';
-                                return null;
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Discount Price (₹)', style: TextStyle(fontWeight: FontWeight.bold, color: inputLabelColor, fontSize: 13)),
-                            const SizedBox(height: 6),
-                            TextFormField(
-                              controller: _discountPriceController,
-                              keyboardType: TextInputType.number,
-                              decoration: _buildInputDecoration('e.g. 8.50'),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Dietary Type & Availability Dropdowns
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Dietary Type', style: TextStyle(fontWeight: FontWeight.bold, color: inputLabelColor, fontSize: 13)),
-                            const SizedBox(height: 6),
-                            DropdownButtonFormField<String>(
-                              isExpanded: true,
-                              value: _selectedDietaryType,
-                              decoration: _buildInputDecoration('Vegetarian'),
-                              style: const TextStyle(fontSize: 13, color: Colors.black),
-                              items: const [
-                                DropdownMenuItem(value: 'Vegetarian', child: Text('Vegetarian', style: TextStyle(fontSize: 13))),
-                                DropdownMenuItem(value: 'Non-Vegetarian', child: Text('Non-Vegetarian', style: TextStyle(fontSize: 12))),
-                                DropdownMenuItem(value: 'Jain', child: Text('Jain', style: TextStyle(fontSize: 13))),
-                              ],
-                              onChanged: (val) {
-                                if (val != null) {
-                                  setState(() {
-                                    _selectedDietaryType = val;
-                                  });
-                                }
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Availability', style: TextStyle(fontWeight: FontWeight.bold, color: inputLabelColor, fontSize: 13)),
-                            const SizedBox(height: 6),
-                            DropdownButtonFormField<String>(
-                              isExpanded: true,
-                              value: _selectedAvailability,
-                              decoration: _buildInputDecoration('In Stock'),
-                              style: const TextStyle(fontSize: 13, color: Colors.black),
-                              items: const [
-                                DropdownMenuItem(value: 'In Stock', child: Text('In Stock', style: TextStyle(fontSize: 13))),
-                                DropdownMenuItem(value: 'Out of Stock', child: Text('Out of Stock', style: TextStyle(fontSize: 12))),
-                              ],
-                              onChanged: (val) {
-                                if (val != null) {
-                                  setState(() {
-                                    _selectedAvailability = val;
-                                  });
-                                }
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Sort Order Input
-                  const Text('Sort Order', style: TextStyle(fontWeight: FontWeight.bold, color: inputLabelColor, fontSize: 13)),
-                  const SizedBox(height: 6),
-                  TextFormField(
-                    controller: _sortOrderController,
-                    keyboardType: TextInputType.number,
-                    decoration: _buildInputDecoration('1'),
-                    validator: (val) => val == null || val.trim().isEmpty ? 'Please enter sort order' : null,
-                  ),
-                  const SizedBox(height: 28),
-
-                  // Create Item Action Button
-                  SizedBox(
-                    height: 48,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: brandOrange,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      ),
-                      onPressed: _isLoading ? null : _handleCreateItem,
-                      child: _isLoading
-                          ? const CircularProgressIndicator(color: Colors.white)
-                          : const Text('Create Item', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  InputDecoration _buildInputDecoration(String hint) {
+  InputDecoration _buildInputDecoration(String hintText, {Widget? suffixIcon}) {
     return InputDecoration(
-      hintText: hint,
-      hintStyle: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 13),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      hintText: hintText,
+      hintStyle: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 13.5),
       filled: true,
       fillColor: Colors.white,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      suffixIcon: suffixIcon,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
         borderSide: const BorderSide(color: Color(0xFFD1D5DB), width: 1),
@@ -573,6 +379,389 @@ class _RestaurantAddMenuItemScreenState extends State<RestaurantAddMenuItemScree
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
         borderSide: const BorderSide(color: Colors.red, width: 1),
+      ),
+    );
+  }
+
+  Widget _buildFieldLabel(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6.0),
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontWeight: FontWeight.w600,
+          color: Color(0xFF4B5563),
+          fontSize: 13.5,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const Color brandOrange = Color(0xFFF15A22);
+
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        title: Text(
+          widget.isEdit ? 'Edit Meal' : 'Add Meal',
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+            color: Color(0xFF1F2937),
+          ),
+        ),
+        centerTitle: false,
+        backgroundColor: Colors.white,
+        foregroundColor: const Color(0xFF1F2937),
+        elevation: 0.5,
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.all(16.0),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // 1. Date to Schedule & Meal Type Row
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildFieldLabel('Date to Schedule'),
+                          TextFormField(
+                            controller: _dateController,
+                            readOnly: true,
+                            onTap: () => _selectDate(context),
+                            style: const TextStyle(fontSize: 13.5, color: Color(0xFF1F2937)),
+                            decoration: _buildInputDecoration(
+                              'Select Date',
+                              suffixIcon: IconButton(
+                                icon: const Icon(Icons.calendar_today_outlined, size: 18, color: Color(0xFF6B7280)),
+                                onPressed: () => _selectDate(context),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildFieldLabel('Meal Type'),
+                          DropdownButtonFormField<String>(
+                            value: _normalizeMealType(_selectedMealType),
+                            isExpanded: true,
+                            style: const TextStyle(fontSize: 13.5, color: Color(0xFF1F2937)),
+                            decoration: _buildInputDecoration("Today's Meal"),
+                            items: const [
+                              DropdownMenuItem(value: "Today's Meal", child: Text("Today's Meal")),
+                              DropdownMenuItem(value: "Tomorrow's Meal", child: Text("Tomorrow's Meal")),
+                              DropdownMenuItem(value: "Weekly Meal", child: Text("Weekly Meal")),
+                              DropdownMenuItem(value: "General Menu", child: Text("General Menu")),
+                            ],
+                            onChanged: (val) {
+                              if (val != null) {
+                                setState(() {
+                                  _selectedMealType = val;
+                                });
+                              }
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                // 2. Available Add-ons
+                _buildFieldLabel('Available Add-ons'),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFD1D5DB), width: 1),
+                  ),
+                  child: widget.stateProvider.todayAddons.isEmpty
+                      ? const Text(
+                          'No active add-ons available. Create them in the Add-ons tab.',
+                          style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+                        )
+                      : Wrap(
+                          spacing: 8,
+                          runSpacing: 6,
+                          children: widget.stateProvider.todayAddons.map((addon) {
+                            final int id = addon['id'] ?? 0;
+                            final bool isSelected = _selectedAddonIds.contains(id);
+                            return FilterChip(
+                              label: Text('${addon['name']} (£${addon['price']})'),
+                              selected: isSelected,
+                              selectedColor: brandOrange.withOpacity(0.15),
+                              checkmarkColor: brandOrange,
+                              labelStyle: TextStyle(
+                                fontSize: 12.5,
+                                color: isSelected ? brandOrange : const Color(0xFF374151),
+                                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                              ),
+                              onSelected: (selected) {
+                                setState(() {
+                                  if (selected) {
+                                    _selectedAddonIds.add(id);
+                                  } else {
+                                    _selectedAddonIds.remove(id);
+                                  }
+                                });
+                              },
+                            );
+                          }).toList(),
+                        ),
+                ),
+                const SizedBox(height: 16),
+
+                // 3. Meal Box Name
+                _buildFieldLabel('Meal Box Name'),
+                TextFormField(
+                  controller: _nameController,
+                  style: const TextStyle(fontSize: 14),
+                  decoration: _buildInputDecoration('e.g. Deluxe Gujarati Thali'),
+                  validator: (val) => val == null || val.trim().isEmpty ? 'Please enter meal box name' : null,
+                ),
+                const SizedBox(height: 16),
+
+                // 4. Description
+                _buildFieldLabel('Description'),
+                TextFormField(
+                  controller: _descriptionController,
+                  maxLines: 3,
+                  style: const TextStyle(fontSize: 14),
+                  decoration: _buildInputDecoration('e.g. 2 curries, sweet, farsan, rotlis...'),
+                ),
+                const SizedBox(height: 16),
+
+                // 5. Meal Image
+                _buildFieldLabel('Meal Image'),
+                InkWell(
+                  onTap: () => _showImageSourceActionSheet(context),
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFFD1D5DB), width: 1),
+                    ),
+                    child: Row(
+                      children: [
+                        ElevatedButton(
+                          onPressed: () => _showImageSourceActionSheet(context),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFF3F4F6),
+                            foregroundColor: const Color(0xFF1F2937),
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(6),
+                              side: const BorderSide(color: Color(0xFFD1D5DB), width: 1),
+                            ),
+                          ),
+                          child: const Text(
+                            'Choose file',
+                            style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w500),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            _selectedImageName ?? 'No file chosen',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: _selectedImageName != null ? const Color(0xFF1F2937) : const Color(0xFF374151),
+                            ),
+                          ),
+                        ),
+                        if (_pickedImageFile != null) ...[
+                          const SizedBox(width: 8),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(6),
+                            child: Image.file(_pickedImageFile!, width: 40, height: 40, fit: BoxFit.cover),
+                          ),
+                        ] else if (_existingImageUrl != null && _existingImageUrl!.isNotEmpty) ...[
+                          const SizedBox(width: 8),
+                          FoodImage(
+                            title: _nameController.text,
+                            imageUrl: _existingImageUrl,
+                            width: 40,
+                            height: 40,
+                            borderRadius: 6,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // 6. Price (£) & Discount Price (£) Row
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildFieldLabel('Price (£)'),
+                          TextFormField(
+                            controller: _regularPriceController,
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            style: const TextStyle(fontSize: 14),
+                            decoration: _buildInputDecoration(''),
+                            validator: (val) {
+                              if (val == null || val.trim().isEmpty) return 'Enter price';
+                              if (double.tryParse(val.trim()) == null) return 'Invalid price';
+                              return null;
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildFieldLabel('Discount Price (£)'),
+                          TextFormField(
+                            controller: _discountPriceController,
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            style: const TextStyle(fontSize: 14),
+                            decoration: _buildInputDecoration(''),
+                            validator: (val) {
+                              if (val != null && val.trim().isNotEmpty) {
+                                final dVal = double.tryParse(val.trim());
+                                final pVal = double.tryParse(_regularPriceController.text.trim());
+                                if (dVal == null) return 'Invalid price';
+                                if (pVal != null && dVal >= pVal) return 'Must be < Price';
+                              }
+                              return null;
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                // 7. Dietary Type & Availability Row
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildFieldLabel('Dietary Type'),
+                          DropdownButtonFormField<String>(
+                            value: _normalizeDietaryType(_selectedDietaryType),
+                            isExpanded: true,
+                            style: const TextStyle(fontSize: 13.5, color: Color(0xFF1F2937)),
+                            decoration: _buildInputDecoration(''),
+                            items: const [
+                              DropdownMenuItem(value: 'Vegetarian (VEG)', child: Text('Vegetarian (VEG)')),
+                              DropdownMenuItem(value: 'Non-Vegetarian (NON-VEG)', child: Text('Non-Vegetarian (NON-VEG)')),
+                              DropdownMenuItem(value: 'Jain (JAIN)', child: Text('Jain (JAIN)')),
+                              DropdownMenuItem(value: 'Vegan (VEGAN)', child: Text('Vegan (VEGAN)')),
+                            ],
+                            onChanged: (val) {
+                              if (val != null) {
+                                setState(() {
+                                  _selectedDietaryType = val;
+                                });
+                              }
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildFieldLabel('Availability'),
+                          DropdownButtonFormField<String>(
+                            value: _normalizeAvailability(_selectedAvailability),
+                            isExpanded: true,
+                            style: const TextStyle(fontSize: 13.5, color: Color(0xFF1F2937)),
+                            decoration: _buildInputDecoration(''),
+                            items: const [
+                              DropdownMenuItem(value: 'Available', child: Text('Available')),
+                              DropdownMenuItem(value: 'Out of Stock', child: Text('Out of Stock')),
+                            ],
+                            onChanged: (val) {
+                              if (val != null) {
+                                setState(() {
+                                  _selectedAvailability = val;
+                                });
+                              }
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 28),
+
+                // 8. Primary Schedule Meal Button
+                SizedBox(
+                  height: 48,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: brandOrange,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      elevation: 0,
+                    ),
+                    onPressed: _isLoading ? null : _handleSaveItem,
+                    child: _isLoading
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2.5,
+                            ),
+                          )
+                        : Text(
+                            widget.isEdit ? 'Update Meal' : 'Schedule Meal',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

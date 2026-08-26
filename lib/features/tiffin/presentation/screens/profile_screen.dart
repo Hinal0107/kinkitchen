@@ -194,6 +194,17 @@ class ProfileScreen extends StatelessWidget {
                   ),
                   const Divider(height: 1, color: Color(0xFFF3F4F6)),
 
+                  _buildProfileTile(
+                    icon: Icons.gavel_outlined,
+                    iconColor: const Color(0xFF6366F1),
+                    title: 'Terms & Conditions',
+                    subtitle: 'Subscription & Add-on Rules',
+                    onTap: () {
+                      Navigator.pushNamed(context, '/terms-and-conditions');
+                    },
+                  ),
+                  const Divider(height: 1, color: Color(0xFFF3F4F6)),
+
                   // Logout tile (red color)
                   _buildProfileTile(
                     icon: Icons.logout,

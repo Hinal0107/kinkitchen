@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../config/api_config.dart';
 import '../errors/failure.dart';
@@ -126,10 +127,12 @@ class ApiClient {
 
       // Attach file stream if present
       if (fileKey != null && file != null) {
+        final mediaType = _getMediaType(file.path);
         request.files.add(
           await http.MultipartFile.fromPath(
             fileKey,
             file.path,
+            contentType: mediaType,
           ),
         );
       }
@@ -186,6 +189,17 @@ class ApiClient {
               ? body['message'] 
               : 'Server error ($statusCode).',
         );
+    }
+  }
+
+  MediaType _getMediaType(String path) {
+    final lower = path.toLowerCase();
+    if (lower.endsWith('.png')) {
+      return MediaType('image', 'png');
+    } else if (lower.endsWith('.webp')) {
+      return MediaType('image', 'webp');
+    } else {
+      return MediaType('image', 'jpeg');
     }
   }
 }

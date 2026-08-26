@@ -228,9 +228,9 @@ class _RestaurantOrdersScreenState extends State<RestaurantOrdersScreen> with Si
                       ),
                       const SizedBox(height: 8),
                       ...order.items.map((item) {
-                        final String itemName = item['menu_item']?['name'] ?? item['name'] ?? 'Item';
-                        final int itemQty = item['quantity'] ?? 1;
-                        final double itemPrice = (item['price'] as num? ?? 0.0).toDouble();
+                        final String itemName = item.name;
+                        final int itemQty = item.quantity;
+                        final double itemPrice = item.unitPrice;
                         return Padding(
                           padding: const EdgeInsets.symmetric(vertical: 4.0),
                           child: Row(

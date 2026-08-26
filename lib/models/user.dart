@@ -16,13 +16,20 @@ class User {
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
+    int toInt(dynamic val) {
+      if (val is int) return val;
+      if (val is num) return val.toInt();
+      if (val is String) return int.tryParse(val) ?? 0;
+      return 0;
+    }
+
     return User(
-      id: json['id'] as int,
-      uid: json['firebase_uid'] as String? ?? json['uid'] as String? ?? '',
-      name: json['name'] as String? ?? '',
-      email: json['email'] as String? ?? '',
-      phone: json['phone'] as String? ?? '',
-      role: (json['role'] as String? ?? 'customer').toLowerCase(),
+      id: toInt(json['id']),
+      uid: json['firebase_uid']?.toString() ?? json['uid']?.toString() ?? '',
+      name: json['name']?.toString() ?? '',
+      email: json['email']?.toString() ?? '',
+      phone: json['phone']?.toString() ?? '',
+      role: (json['role']?.toString() ?? 'customer').toLowerCase(),
     );
   }
 

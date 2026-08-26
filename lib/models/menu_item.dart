@@ -8,7 +8,7 @@ class MenuItem {
   final double discountPrice;
   final String vegType; // 'VEG', 'NON_VEG', 'JAIN'
   final bool availability;
-  final String status; // 'active', 'inactive'
+  final String status; // 'ACTIVE', 'INACTIVE'
   final String? imageUrl;
   final String? scheduleDate;
 
@@ -28,21 +28,40 @@ class MenuItem {
   });
 
   factory MenuItem.fromJson(Map<String, dynamic> json) {
+    int toInt(dynamic val) {
+      if (val is int) return val;
+      if (val is num) return val.toInt();
+      if (val is String) return int.tryParse(val) ?? 0;
+      return 0;
+    }
+
+    double toDouble(dynamic val) {
+      if (val is double) return val;
+      if (val is num) return val.toDouble();
+      if (val is String) return double.tryParse(val) ?? 0.0;
+      return 0.0;
+    }
+
+    bool toBool(dynamic val) {
+      if (val is bool) return val;
+      if (val is int) return val == 1;
+      if (val is String) return val == '1' || val.toLowerCase() == 'true';
+      return true;
+    }
+
     return MenuItem(
-      id: json['id'] as int? ?? 0,
-      categoryId: json['category_id'] as int? ?? 0,
-      restaurantId: json['restaurant_id'] as int? ?? 0,
-      name: json['name'] as String? ?? 'Unnamed Item',
-      description: json['description'] as String? ?? '',
-      price: (json['price'] as num? ?? 0.0).toDouble(),
-      discountPrice: (json['discount_price'] as num? ?? 0.0).toDouble(),
-      vegType: json['veg_type'] as String? ?? 'VEG',
-      availability: (json['availability'] is int) 
-          ? (json['availability'] as int) == 1 
-          : (json['availability'] as bool? ?? true),
-      status: json['status'] as String? ?? 'active',
-      imageUrl: json['imageUrl'] as String? ?? json['image_url'] as String?,
-      scheduleDate: json['schedule_date'] as String?,
+      id: toInt(json['id']),
+      categoryId: toInt(json['category_id']),
+      restaurantId: toInt(json['restaurant_id']),
+      name: json['name']?.toString() ?? 'Unnamed Item',
+      description: json['description']?.toString() ?? '',
+      price: toDouble(json['price']),
+      discountPrice: toDouble(json['discount_price']),
+      vegType: json['veg_type']?.toString() ?? 'VEG',
+      availability: toBool(json['availability']),
+      status: json['status']?.toString() ?? 'ACTIVE',
+      imageUrl: json['imageUrl']?.toString() ?? json['image_url']?.toString() ?? json['image']?.toString(),
+      scheduleDate: json['schedule_date']?.toString(),
     );
   }
 

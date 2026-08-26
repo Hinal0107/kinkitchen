@@ -10,6 +10,7 @@ class PlansScreen extends StatelessWidget {
     final state = TiffinStateScope.of(context);
     const Color customerOrange = Color(0xFFFF5E00);
     const Color restaurantGreen = Color(0xFF00A859);
+    final activeSub = state.activeSubscriptionDetails;
 
     // 1. Initial State: No Restaurant Selected yet
     if (state.selectedRestaurantId == null) {
@@ -43,7 +44,6 @@ class PlansScreen extends StatelessWidget {
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(backgroundColor: customerOrange),
                   onPressed: () {
-                    // Go to Home screen (tab index 0)
                     context.findAncestorStateOfType<DashboardScreenState>()?.setTab(0);
                   },
                   child: const Text('Browse Restaurants'),
@@ -118,6 +118,12 @@ class PlansScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  // Active Subscription Status Banner
+                  if (activeSub != null) ...[
+                    _buildActiveSubscriptionCard(context, activeSub, customerOrange, restaurantGreen, state),
+                    const SizedBox(height: 24),
+                  ],
+
                   Text(
                     'Choose Your Plan',
                     textAlign: TextAlign.center,
@@ -133,7 +139,7 @@ class PlansScreen extends StatelessWidget {
                     textAlign: TextAlign.center,
                     style: TextStyle(color: Color(0xFF6B7280), fontSize: 14, height: 1.4),
                   ),
-                  const SizedBox(height: 28),
+                  const SizedBox(height: 24),
 
                   // Map Plans
                   ...state.subscriptionPlans.map((plan) {
@@ -208,7 +214,8 @@ class PlansScreen extends StatelessWidget {
 
                                 // Feature Details list
                                 _buildBulletRow(restaurantGreen, 'Duration: ${plan.duration}'),
-                                _buildBulletRow(restaurantGreen, 'Total: ${plan.mealsCount} Meals'),
+                                _buildBulletRow(restaurantGreen, 'Total Meals: ${plan.mealsCount} Meals'),
+                                _buildBulletRow(restaurantGreen, 'Max Validity Window: ${plan.maxValidityDays} Days'),
                                 _buildBulletRow(restaurantGreen, 'Meal Type: ${plan.mealType}'),
                                 _buildBulletRow(restaurantGreen, 'Taxes/Discounts: ${plan.taxesAndDisc}'),
                                 
@@ -233,7 +240,7 @@ class PlansScreen extends StatelessWidget {
                                           context: context,
                                           builder: (context) => AlertDialog(
                                             title: const Text('Subscribed!'),
-                                            content: Text('You have successfully subscribed to the ${plan.title}!'),
+                                            content: Text('You have successfully subscribed to the ${plan.title}!\n\nNote: Meals must be consumed within maximum ${plan.maxValidityDays} days.'),
                                             actions: [
                                               TextButton(
                                                 onPressed: () => Navigator.pop(context),
@@ -273,9 +280,178 @@ class PlansScreen extends StatelessWidget {
                       ),
                     );
                   }).toList(),
+
+                  const SizedBox(height: 12),
+                  
+                  // Terms & Conditions Footer Button
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF4B5563),
+                      side: const BorderSide(color: Color(0xFFD1D5DB)),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: () {
+                      Navigator.pushNamed(context, '/terms-and-conditions');
+                    },
+                    icon: const Icon(Icons.gavel_outlined, size: 18),
+                    label: const Text(
+                      'View Subscription Terms & Conditions',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
                 ],
               ),
             ),
+    );
+  }
+
+  Widget _buildActiveSubscriptionCard(
+    BuildContext context,
+    dynamic activeSub,
+    Color customerOrange,
+    Color restaurantGreen,
+    TiffinStateProvider state,
+  ) {
+    final bool isExpiringSoon = activeSub.isExpiringSoon;
+    final String reminderMsg = activeSub.effectiveReminderMessage;
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isExpiringSoon ? const Color(0xFFF59E0B) : restaurantGreen,
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header Badge
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.check_circle, color: restaurantGreen, size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Active Plan: ${activeSub.plan?.title ?? state.activeSubscription}',
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF1F2937),
+                    ),
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: restaurantGreen.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  activeSub.status.toUpperCase(),
+                  style: TextStyle(
+                    color: restaurantGreen,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          // Pending Meals & Expiry Metrics
+          Row(
+            children: [
+              Expanded(
+                child: _buildMetricTile(
+                  'Pending Meals',
+                  '${activeSub.remainingMeals} / ${activeSub.totalMeals}',
+                  Icons.restaurant,
+                  customerOrange,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildMetricTile(
+                  'Max Validity',
+                  '${activeSub.maxValidityDays} Days',
+                  Icons.calendar_month,
+                  Colors.blue,
+                ),
+              ),
+            ],
+          ),
+
+          // Dynamic Reminder Box (2 days before expiry)
+          if (reminderMsg.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFFBEB),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFFCD34D)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.warning_amber_rounded, color: Color(0xFFD97706), size: 22),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      reminderMsg,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF92400E),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMetricTile(String label, String value, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 20),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280))),
+                Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF1F2937))),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -300,12 +476,12 @@ class PlansScreen extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: const [
             Icon(Icons.card_membership_outlined, size: 56, color: Color(0xFFD1D5DB)),
-            const SizedBox(height: 16),
+            SizedBox(height: 16),
             Text(
               'No Subscription Plans Found',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1F2937)),
             ),
-            const SizedBox(height: 8),
+            SizedBox(height: 8),
             Text(
               'This restaurant has not configured any subscription meal plans yet.',
               textAlign: TextAlign.center,

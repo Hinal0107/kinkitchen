@@ -56,4 +56,6 @@ class RestaurantRegisterEvent extends AuthEvent {
   });
 }
 
+class CheckAuthStatusEvent extends AuthEvent {}
+
 class LogoutEvent extends AuthEvent {}

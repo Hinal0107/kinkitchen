@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../core/widgets/food_image.dart';
 import '../../../../models/menu_item.dart';
-import '../bloc/tiffin_state_provider.dart';
 import 'dashboard_screen.dart';
 
 class MenuScreen extends StatefulWidget {
@@ -109,12 +108,96 @@ class _MenuScreenState extends State<MenuScreen> {
       );
     }
 
-    // Build lists
-    final List<String> categoriesList = ['All', ...state.categories.map((c) => c.name)];
-    
+    // 4. Access Control State: Free Trial Expired & No Active Subscription
+    if (!state.canAccessMeals && state.activeSubscription == 'None') {
+      return Scaffold(
+        backgroundColor: const Color(0xFFF9FAFB),
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back, color: Color(0xFF1F2937)),
+            onPressed: () {
+              context.findAncestorStateOfType<DashboardScreenState>()?.setTab(0);
+            },
+          ),
+          title: const Text('Menu Access Restricted', style: TextStyle(color: Color(0xFF1F2937), fontWeight: FontWeight.bold, fontSize: 18)),
+          centerTitle: true,
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: customerOrange.withOpacity(0.08),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.lock_clock_outlined, size: 64, color: customerOrange),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  'Free Trial Expired',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF1F2937)),
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Your initial 7-day free trial period has ended.\nTo continue viewing meal menus and placing daily tiffin orders, please subscribe to a plan.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 13.5, color: Color(0xFF6B7280), height: 1.5),
+                ),
+                const SizedBox(height: 28),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: customerOrange,
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onPressed: () {
+                    context.findAncestorStateOfType<DashboardScreenState>()?.setTab(2); // Go to Plans tab
+                  },
+                  icon: const Icon(Icons.card_membership_rounded, size: 20),
+                  label: const Text('Browse Subscription Plans', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Build lists — exclude special categories (add-ons, today/tomorrow meals)
+    final regularCategories = state.categories.where((cat) {
+      final name = cat.name.toLowerCase();
+      return !name.contains('add-on') &&
+          !name.contains('addon') &&
+          name != 'today' &&
+          name != "today's meals" &&
+          name != 'tomorrow' &&
+          name != "tomorrow's meals";
+    }).toList();
+
+    final List<String> categoriesList = ['All', ...regularCategories.map((c) => c.name)];
+
     final filteredItems = state.menuItems.where((item) {
-      final matchesCategory = state.selectedCategory == 'All' || 
-          state.categories.firstWhere((c) => c.name == state.selectedCategory).id == item.categoryId;
+      // Exclude add-on and scheduled meal items
+      final cat = state.categories.where((c) => c.id == item.categoryId).isNotEmpty
+          ? state.categories.firstWhere((c) => c.id == item.categoryId)
+          : null;
+      if (cat != null) {
+        final catName = cat.name.toLowerCase();
+        if (catName.contains('add-on') || catName.contains('addon')) return false;
+        if (catName == 'today' || catName == "today's meals") return false;
+        if (catName == 'tomorrow' || catName == "tomorrow's meals") return false;
+      }
+      // Exclude items with a scheduleDate (today/tomorrow meals)
+      if (item.scheduleDate != null && item.scheduleDate!.isNotEmpty) return false;
+
+      final matchesCategory = state.selectedCategory == 'All' ||
+          regularCategories.any((c) => c.name == state.selectedCategory && c.id == item.categoryId);
       final matchesSearch = item.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
           item.description.toLowerCase().contains(_searchQuery.toLowerCase());
       return matchesCategory && matchesSearch;
@@ -180,7 +263,7 @@ class _MenuScreenState extends State<MenuScreen> {
               ),
 
               // 2. Category Chips
-              if (state.categories.isNotEmpty)
+              if (regularCategories.isNotEmpty)
                 Container(
                   height: 52,
                   color: Colors.white,
@@ -268,7 +351,7 @@ class _MenuScreenState extends State<MenuScreen> {
                             child: Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                FoodImage(title: item.name, width: 90, height: 90, borderRadius: 12),
+                                FoodImage(title: item.name, imageUrl: item.imageUrl, width: 90, height: 90, borderRadius: 12),
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: Column(

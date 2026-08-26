@@ -3,7 +3,7 @@ class MenuCategory {
   final int restaurantId;
   final String name;
   final String description;
-  final String status; // 'active', 'inactive'
+  final String status;
   final String? imageUrl;
 
   MenuCategory({
@@ -16,13 +16,20 @@ class MenuCategory {
   });
 
   factory MenuCategory.fromJson(Map<String, dynamic> json) {
+    int toInt(dynamic val) {
+      if (val is int) return val;
+      if (val is num) return val.toInt();
+      if (val is String) return int.tryParse(val) ?? 0;
+      return 0;
+    }
+
     return MenuCategory(
-      id: json['id'] as int? ?? 0,
-      restaurantId: json['restaurant_id'] as int? ?? 0,
-      name: json['name'] as String? ?? 'General',
-      description: json['description'] as String? ?? '',
-      status: json['status'] as String? ?? 'active',
-      imageUrl: json['imageUrl'] as String? ?? json['image_url'] as String?,
+      id: toInt(json['id']),
+      restaurantId: toInt(json['restaurant_id']),
+      name: json['name']?.toString() ?? 'General',
+      description: json['description']?.toString() ?? '',
+      status: json['status']?.toString() ?? 'ACTIVE',
+      imageUrl: json['imageUrl']?.toString() ?? json['image_url']?.toString() ?? json['image']?.toString(),
     );
   }
 

@@ -4,6 +4,7 @@ import '../../../../repositories/restaurant_repository.dart';
 import '../../../../models/restaurant.dart';
 import '../../../../models/menu_category.dart';
 import '../../../../models/menu_item.dart';
+import '../../../../models/daily_meal_item.dart';
 import '../../../../models/subscription_plan.dart';
 import '../../../../models/order.dart';
 
@@ -17,21 +18,13 @@ class RestaurantStateProvider extends ChangeNotifier {
   String? _errorMessage;
   String? get errorMessage => _errorMessage;
 
-  // Demo State: Toggle between Empty Kitchen and Filled Dashboard
-  bool _isKitchenEmpty = false;
-  bool get isKitchenEmpty => _isKitchenEmpty;
-
   // Models fetched from API
   Restaurant? profile;
   List<MenuCategory> categories = [];
   List<MenuItem> menuItems = [];
+  List<DailyMealItem> dailyMeals = [];
   List<SubscriptionPlan> subscriptionPlans = [];
   List<Order> orders = [];
-
-  void toggleKitchenState() {
-    _isKitchenEmpty = !_isKitchenEmpty;
-    notifyListeners();
-  }
 
   void _setLoading(bool value) {
     _isLoading = value;
@@ -45,7 +38,24 @@ class RestaurantStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // --- COMPATIBLE GETTERS MAPPING BACKEND MODELS TO UI WIDGETS ---
+  // --- DATE HELPERS ---
+
+  String get _todayDmy {
+    final now = DateTime.now();
+    return '${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year}';
+  }
+
+  String get _todayYmd {
+    final now = DateTime.now();
+    return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+  }
+
+  String get _tomorrowDmy {
+    final tom = DateTime.now().add(const Duration(days: 1));
+    return '${tom.day.toString().padLeft(2, '0')}/${tom.month.toString().padLeft(2, '0')}/${tom.year}';
+  }
+
+  // --- COMPATIBLE GETTERS ---
 
   int get totalItemsCount => menuItems.length;
   int get activeItemsCount => menuItems.where((i) => i.availability).length;
@@ -67,39 +77,40 @@ class RestaurantStateProvider extends ChangeNotifier {
     return menuItems.where((item) => item.categoryId == cat.id).length;
   }
 
-  List<Map<String, dynamic>> get todayAddons {
+  /// All add-on items (shared between today & tomorrow)
+  List<Map<String, dynamic>> get addons {
     final cat = addonsCategory;
     if (cat == null) return [];
     return menuItems.where((item) => item.categoryId == cat.id).map((item) => {
       'id': item.id,
       'title': item.name,
+      'name': item.name,
+      'description': item.description,
       'price': item.price,
       'isVeg': item.vegType == 'VEG' || item.vegType == 'JAIN',
+      'isActive': item.availability,
       'isActiveToday': item.availability,
-      'availableQty': item.availability ? 50 : 0,
-      'totalQty': 50,
-    }).toList();
-  }
-
-  List<Map<String, dynamic>> get tomorrowAddons {
-    final cat = addonsCategory;
-    if (cat == null) return [];
-    return menuItems.where((item) => item.categoryId == cat.id).map((item) => {
-      'id': item.id,
-      'title': item.name,
-      'price': item.price,
-      'isVeg': item.vegType == 'VEG' || item.vegType == 'JAIN',
       'isActiveTomorrow': item.availability,
       'availableQty': item.availability ? 50 : 0,
       'totalQty': 50,
+      'image': item.imageUrl,
+      'imageUrl': item.imageUrl,
     }).toList();
   }
 
+  List<Map<String, dynamic>> get todayAddons => addons;
+  List<Map<String, dynamic>> get tomorrowAddons => addons;
+
+  /// Menu items shown in the Menu tab (stored in menu_items table)
   List<Map<String, dynamic>> get menuItemsMap {
-    return menuItems.map((item) {
+    final addonCat = addonsCategory;
+    return menuItems.where((item) {
+      if (addonCat != null && item.categoryId == addonCat.id) return false;
+      return true;
+    }).map((item) {
       final categoryName = categories.firstWhere(
-        (c) => c.id == item.categoryId, 
-        orElse: () => MenuCategory(id: 0, restaurantId: 0, name: 'Lunch', description: '', status: 'active')
+        (c) => c.id == item.categoryId,
+        orElse: () => MenuCategory(id: 0, restaurantId: 0, name: 'General', description: '', status: 'ACTIVE'),
       ).name;
       return {
         'id': item.id,
@@ -109,6 +120,7 @@ class RestaurantStateProvider extends ChangeNotifier {
         'isActive': item.availability,
         'category': categoryName,
         'description': item.description,
+        'image': item.imageUrl,
       };
     }).toList();
   }
@@ -123,50 +135,74 @@ class RestaurantStateProvider extends ChangeNotifier {
       'mealType': p.mealType,
       'taxesAndDisc': p.taxesAndDisc,
       'isPopular': p.isPopular,
-      'isActive': p.status == 'active',
+      'isActive': p.status == 'ACTIVE' || p.status == 'active',
       'period': p.duration == 'Weekly' ? '/week' : '/month',
     }).toList();
   }
 
+  /// Today's meals fetched from daily_meals table
   List<Map<String, dynamic>> get todayMeals {
-    final DateTime now = DateTime.now();
-    final String todayDmy = '${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year}';
-    final String todayYmd = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    final now = DateTime.now();
+    final todayYmd = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    final todayDmy = '${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year}';
 
-    final addonCat = addonsCategory;
-    final meals = addonCat == null 
-        ? menuItems.where((item) => item.scheduleDate == null || item.scheduleDate!.isEmpty || item.scheduleDate == todayDmy || item.scheduleDate == todayYmd)
-        : menuItems.where((item) => item.categoryId != addonCat.id && (item.scheduleDate == null || item.scheduleDate!.isEmpty || item.scheduleDate == todayDmy || item.scheduleDate == todayYmd));
-
-    return meals.map((item) => {
-      'title': item.name,
-      'price': item.price,
+    return dailyMeals.where((meal) {
+      final mType = meal.mealType.trim().toUpperCase();
+      if (mType == 'TODAY') return true;
+      if (mType == 'TOMORROW' || mType == 'WEEKLY') return false;
+      return meal.date == todayYmd || meal.date == todayDmy || meal.date.startsWith(todayYmd);
+    }).map((meal) => {
+      'id': meal.id,
+      'title': meal.name,
+      'name': meal.name,
+      'description': meal.description,
+      'price': meal.price,
+      'discount_price': meal.discountPrice,
+      'discountPrice': meal.discountPrice,
       'gst': '5%',
-      'availableQty': item.availability ? 50 : 0,
+      'availableQty': meal.availability ? 50 : 0,
       'totalQty': 50,
-      'isActive': item.availability,
+      'isActive': meal.availability,
       'createdAt': 'Today',
-      'isVeg': item.vegType == 'VEG' || item.vegType == 'JAIN',
+      'isVeg': meal.vegType == 'VEG' || meal.vegType == 'JAIN',
+      'veg_type': meal.vegType,
+      'meal_type': meal.mealType,
+      'date': meal.date,
+      'image': meal.image,
+      'imageUrl': meal.image,
+      'addons': meal.addons,
     }).toList();
   }
 
+  /// Tomorrow's meals fetched from daily_meals table
   List<Map<String, dynamic>> get tomorrowMeals {
-    final DateTime tom = DateTime.now().add(const Duration(days: 1));
-    final String tomDmy = '${tom.day.toString().padLeft(2, '0')}/${tom.month.toString().padLeft(2, '0')}/${tom.year}';
-    final String tomYmd = '${tom.year}-${tom.month.toString().padLeft(2, '0')}-${tom.day.toString().padLeft(2, '0')}';
+    final tom = DateTime.now().add(const Duration(days: 1));
+    final tomYmd = '${tom.year}-${tom.month.toString().padLeft(2, '0')}-${tom.day.toString().padLeft(2, '0')}';
+    final tomDmy = '${tom.day.toString().padLeft(2, '0')}/${tom.month.toString().padLeft(2, '0')}/${tom.year}';
 
-    final addonCat = addonsCategory;
-    final meals = addonCat == null
-        ? menuItems.where((item) => item.scheduleDate == tomDmy || item.scheduleDate == tomYmd)
-        : menuItems.where((item) => item.categoryId != addonCat.id && (item.scheduleDate == tomDmy || item.scheduleDate == tomYmd));
-
-    return meals.map((item) => {
-      'title': item.name,
-      'price': item.price,
-      'availableQty': 50,
+    return dailyMeals.where((meal) {
+      final mType = meal.mealType.trim().toUpperCase();
+      if (mType == 'TOMORROW') return true;
+      if (mType == 'TODAY' || mType == 'WEEKLY') return false;
+      return meal.date == tomYmd || meal.date == tomDmy || meal.date.startsWith(tomYmd);
+    }).map((meal) => {
+      'id': meal.id,
+      'title': meal.name,
+      'name': meal.name,
+      'description': meal.description,
+      'price': meal.price,
+      'discount_price': meal.discountPrice,
+      'discountPrice': meal.discountPrice,
+      'availableQty': meal.availability ? 50 : 0,
       'totalQty': 50,
-      'isActive': item.availability,
-      'isVeg': item.vegType == 'VEG' || item.vegType == 'JAIN',
+      'isActive': meal.availability,
+      'isVeg': meal.vegType == 'VEG' || meal.vegType == 'JAIN',
+      'veg_type': meal.vegType,
+      'meal_type': meal.mealType,
+      'date': meal.date,
+      'image': meal.image,
+      'imageUrl': meal.image,
+      'addons': meal.addons,
     }).toList();
   }
 
@@ -198,6 +234,17 @@ class RestaurantStateProvider extends ChangeNotifier {
     _setLoading(true);
     try {
       menuItems = await _restaurantRepository.getMenuItems(category: category, search: search);
+      _isLoading = false;
+      notifyListeners();
+    } catch (e) {
+      _setError(e.toString());
+    }
+  }
+
+  Future<void> fetchDailyMeals() async {
+    _setLoading(true);
+    try {
+      dailyMeals = await _restaurantRepository.getDailyMeals();
       _isLoading = false;
       notifyListeners();
     } catch (e) {
@@ -250,6 +297,20 @@ class RestaurantStateProvider extends ChangeNotifier {
       notifyListeners();
     } catch (e) {
       _setError(e.toString());
+      rethrow;
+    }
+  }
+
+  Future<void> updateCategory(int id, String name, String description, String status, {File? image}) async {
+    _setLoading(true);
+    try {
+      await _restaurantRepository.updateCategory(id, name, description, status, image: image);
+      categories = await _restaurantRepository.getCategories();
+      _isLoading = false;
+      notifyListeners();
+    } catch (e) {
+      _setError(e.toString());
+      rethrow;
     }
   }
 
@@ -265,10 +326,28 @@ class RestaurantStateProvider extends ChangeNotifier {
     }
   }
 
+  // --- MENU ITEMS (GENERAL MENU) ---
+
   Future<void> addMenuItem(Map<String, String> fields, {File? image}) async {
     _setLoading(true);
     try {
-      await _restaurantRepository.createMenuItem(fields, image: image);
+      final sanitizedFields = Map<String, String>.from(fields);
+      sanitizedFields['status'] = 'ACTIVE';
+      await _restaurantRepository.createMenuItem(sanitizedFields, image: image);
+      menuItems = await _restaurantRepository.getMenuItems();
+      _isLoading = false;
+      notifyListeners();
+    } catch (e) {
+      _setError(e.toString());
+      rethrow;
+    }
+  }
+
+  Future<void> updateMenuItem(int id, Map<String, String> fields, {File? image}) async {
+    _setLoading(true);
+    try {
+      final sanitizedFields = Map<String, String>.from(fields);
+      await _restaurantRepository.updateMenuItem(id, sanitizedFields, image: image);
       menuItems = await _restaurantRepository.getMenuItems();
       _isLoading = false;
       notifyListeners();
@@ -287,7 +366,7 @@ class RestaurantStateProvider extends ChangeNotifier {
         'name': item.name,
         'price': item.price.toString(),
         'availability': (!item.availability).toString(),
-        'status': item.status,
+        'status': 'ACTIVE',
       };
       await _restaurantRepository.updateMenuItem(item.id, fields);
       menuItems = await _restaurantRepository.getMenuItems();
@@ -310,71 +389,366 @@ class RestaurantStateProvider extends ChangeNotifier {
     }
   }
 
-  // --- SCREEN COMPATIBILITY WRAPPERS ---
+  // --- DAILY MEALS (TODAY, TOMORROW, WEEKLY - STORED IN daily_meals TABLE) ---
+
+  Future<void> addDailyMeal(Map<String, String> fields, {File? image}) async {
+    _setLoading(true);
+    try {
+      final sanitizedFields = Map<String, String>.from(fields);
+      sanitizedFields['status'] = 'ACTIVE';
+      await _restaurantRepository.createDailyMeal(sanitizedFields, image: image);
+      dailyMeals = await _restaurantRepository.getDailyMeals();
+      _isLoading = false;
+      notifyListeners();
+    } catch (e) {
+      _setError(e.toString());
+      rethrow;
+    }
+  }
+
+  Future<void> updateDailyMealItem(int id, String newTitle, double price, bool isVeg) async {
+    _setLoading(true);
+    try {
+      final item = dailyMeals.firstWhere((i) => i.id == id);
+      await _restaurantRepository.updateDailyMeal(id, {
+        'name': newTitle,
+        'description': item.description,
+        'price': price.toString(),
+        'veg_type': isVeg ? 'VEG' : 'NON_VEG',
+        'availability': item.availability ? '1' : '0',
+        'status': 'ACTIVE',
+        'meal_type': item.mealType,
+        'date': item.date,
+      });
+      dailyMeals = await _restaurantRepository.getDailyMeals();
+      _isLoading = false;
+      notifyListeners();
+    } catch (e) {
+      _setError(e.toString());
+      rethrow;
+    }
+  }
+
+  Future<void> deleteDailyMealById(int id) async {
+    _setLoading(true);
+    try {
+      await _restaurantRepository.deleteDailyMeal(id);
+      dailyMeals = await _restaurantRepository.getDailyMeals();
+      _isLoading = false;
+      notifyListeners();
+    } catch (e) {
+      _setError(e.toString());
+    }
+  }
+
+  // Helper for category creation
+  Future<int> _getOrCreateCategoryId(String name, String description) async {
+    try {
+      if (categories.isEmpty) {
+        categories = await _restaurantRepository.getCategories();
+      }
+      return categories.firstWhere(
+        (c) => c.name.toLowerCase() == name.toLowerCase(),
+      ).id;
+    } catch (_) {
+      await createCategory(name, description, 'ACTIVE');
+      try {
+        return categories.firstWhere(
+          (c) => c.name.toLowerCase() == name.toLowerCase(),
+        ).id;
+      } catch (_) {
+        return categories.isNotEmpty ? categories.first.id : 1;
+      }
+    }
+  }
+
+  // --- TODAY MEAL ACTIONS ---
 
   Future<void> addTodayMeal(String title, double price, int qty, bool isVeg) async {
-    // Add today's meal as a MenuItem
-    await addMenuItem({
-      'category_id': categories.isNotEmpty ? categories.first.id.toString() : '1',
-      'restaurant_id': profile?.id.toString() ?? '1',
+    await addDailyMeal({
+      'date': _todayDmy,
       'name': title,
-      'description': 'Serving fresh today.',
+      'description': "Today's special meal.",
       'price': price.toString(),
       'veg_type': isVeg ? 'VEG' : 'NON_VEG',
+      'meal_type': 'TODAY',
       'availability': '1',
-      'status': 'Active',
+      'status': 'ACTIVE',
     });
   }
 
-  Future<void> toggleTodayMealActive(String title) async {
-    final index = menuItems.indexWhere((item) => item.name == title);
-    if (index >= 0) {
-      await toggleMenuItemActive(menuItems[index]);
+  Future<void> updateDailyMeal(int id, Map<String, String> fields, {File? image}) async {
+    _setLoading(true);
+    try {
+      await _restaurantRepository.updateDailyMeal(id, fields, image: image);
+      dailyMeals = await _restaurantRepository.getDailyMeals();
+      _isLoading = false;
+      notifyListeners();
+    } catch (e) {
+      _setError(e.toString());
+      rethrow;
     }
   }
 
-  Future<void> toggleMenuItemActiveByName(String title) async {
-    final index = menuItems.indexWhere((item) => item.name == title);
-    if (index >= 0) {
-      await toggleMenuItemActive(menuItems[index]);
+  Future<void> toggleDailyMealActive(int id) async {
+    _setLoading(true);
+    try {
+      final item = dailyMeals.firstWhere((i) => i.id == id);
+      await _restaurantRepository.updateDailyMeal(id, {
+        'name': item.name,
+        'description': item.description,
+        'price': item.price.toString(),
+        'veg_type': item.vegType,
+        'availability': (!item.availability) ? '1' : '0',
+        'status': 'ACTIVE',
+        'meal_type': item.mealType,
+        'date': item.date,
+      });
+      dailyMeals = await _restaurantRepository.getDailyMeals();
+      _isLoading = false;
+      notifyListeners();
+    } catch (e) {
+      _setError(e.toString());
     }
+  }
+
+  Future<void> toggleTodayMealActive(String title) async {
+    final index = dailyMeals.indexWhere((item) => item.name == title);
+    if (index >= 0) await toggleDailyMealActive(dailyMeals[index].id);
+  }
+
+  Future<void> updateTodayMealItem(int id, String newTitle, double price, bool isVeg) async {
+    await updateDailyMealItem(id, newTitle, price, isVeg);
   }
 
   Future<void> deleteTodayMeal(String title) async {
-    final index = menuItems.indexWhere((item) => item.name == title);
-    if (index >= 0) {
-      await deleteMenuItem(menuItems[index].id);
-    }
+    final index = dailyMeals.indexWhere((item) => item.name == title);
+    if (index >= 0) await deleteDailyMealById(dailyMeals[index].id);
   }
 
-  Future<void> addTomorrowMeal(String title) async {
-    // Mark tomorrow meal active
-    final index = menuItems.indexWhere((item) => item.name == title);
-    if (index >= 0 && !menuItems[index].availability) {
-      await toggleMenuItemActive(menuItems[index]);
-    }
+  // --- TOMORROW MEAL ACTIONS ---
+
+  Future<void> addTomorrowMealNew(String title, double price, int qty, bool isVeg) async {
+    await addDailyMeal({
+      'date': _tomorrowDmy,
+      'name': title,
+      'description': "Tomorrow's pre-planned meal.",
+      'price': price.toString(),
+      'veg_type': isVeg ? 'VEG' : 'NON_VEG',
+      'meal_type': 'TOMORROW',
+      'availability': '1',
+      'status': 'ACTIVE',
+    });
+  }
+
+  Future<void> updateTomorrowMealItem(int id, String newTitle, double price, bool isVeg) async {
+    await updateDailyMealItem(id, newTitle, price, isVeg);
+  }
+
+  Future<void> toggleTomorrowMealActive(String title) async {
+    final index = dailyMeals.indexWhere((item) => item.name == title);
+    if (index >= 0) await toggleDailyMealActive(dailyMeals[index].id);
   }
 
   Future<void> deleteTomorrowMeal(String title) async {
-    // Mark tomorrow meal inactive
+    final index = dailyMeals.indexWhere((item) => item.name == title);
+    if (index >= 0) await deleteDailyMealById(dailyMeals[index].id);
+  }
+
+  // --- ADDON MANAGEMENT ACTIONS ---
+
+  Future<void> addAddon(
+    String title,
+    double price,
+    int qty,
+    bool isVeg, {
+    String description = '',
+    bool isAvailable = true,
+    File? image,
+  }) async {
+    _setLoading(true);
+    try {
+      final categoryId = await _getOrCreateCategoryId('Add-ons', 'Extra side dishes and beverages');
+      await addMenuItem({
+        'category_id': categoryId.toString(),
+        'restaurant_id': profile?.id.toString() ?? '1',
+        'name': title,
+        'description': description.isNotEmpty ? description : 'Add-on item',
+        'price': price.toString(),
+        'veg_type': isVeg ? 'VEG' : 'NON_VEG',
+        'availability': isAvailable ? '1' : '0',
+        'status': 'ACTIVE',
+      }, image: image);
+    } catch (e) {
+      _setError(e.toString());
+      rethrow;
+    }
+  }
+
+  Future<void> updateAddon(
+    int id,
+    String newTitle,
+    double price,
+    bool isVeg, {
+    String description = '',
+    bool isAvailable = true,
+    File? image,
+  }) async {
+    _setLoading(true);
+    try {
+      final item = menuItems.firstWhere((i) => i.id == id);
+      await _restaurantRepository.updateMenuItem(id, {
+        'category_id': item.categoryId.toString(),
+        'restaurant_id': item.restaurantId.toString(),
+        'name': newTitle,
+        'description': description.isNotEmpty ? description : item.description,
+        'price': price.toString(),
+        'veg_type': isVeg ? 'VEG' : 'NON_VEG',
+        'availability': isAvailable ? '1' : '0',
+        'status': 'ACTIVE',
+      }, image: image);
+      menuItems = await _restaurantRepository.getMenuItems();
+      _isLoading = false;
+      notifyListeners();
+    } catch (e) {
+      _setError(e.toString());
+      rethrow;
+    }
+  }
+
+  Future<void> toggleAddonActive(String title) async {
     final index = menuItems.indexWhere((item) => item.name == title);
-    if (index >= 0 && menuItems[index].availability) {
-      await toggleMenuItemActive(menuItems[index]);
+    if (index >= 0) await toggleMenuItemActive(menuItems[index]);
+  }
+
+  Future<void> toggleAddonActiveToday(String title) => toggleAddonActive(title);
+  Future<void> toggleAddonActiveTomorrow(String title) => toggleAddonActive(title);
+
+  Future<void> deleteAddon(String title) async {
+    final index = menuItems.indexWhere((item) => item.name == title);
+    if (index >= 0) await deleteMenuItem(menuItems[index].id);
+  }
+
+  // --- MENU ITEM ACTIONS ---
+
+  Future<void> toggleMenuItemActiveByName(String title) async {
+    final index = menuItems.indexWhere((item) => item.name == title);
+    if (index >= 0) await toggleMenuItemActive(menuItems[index]);
+  }
+
+  Future<void> deleteMenuItemByTitle(String title) async {
+    final index = menuItems.indexWhere((item) => item.name == title);
+    if (index >= 0) await deleteMenuItem(menuItems[index].id);
+  }
+
+  // --- SUBSCRIPTION PLAN ACTIONS ---
+
+  Future<void> createCustomSubscriptionPlan({
+    required String name,
+    required String description,
+    required double price,
+    required String mealType,
+    required int durationValue,
+    required String durationType,
+    required int mealsPerDay,
+    required int totalMeals,
+    required String deliveryFrequency,
+    String? startsOn,
+  }) async {
+    _setLoading(true);
+    try {
+      final String durationTypeBackend = durationType.toLowerCase().contains('week')
+          ? 'WEEK'
+          : (durationType.toLowerCase().contains('day') ? 'DAY' : 'MONTH');
+
+      final body = {
+        'name': name,
+        'title': name,
+        'description': description.isNotEmpty ? description : '$totalMeals meals subscription',
+        'price': price,
+        'meal_type': mealType,
+        'duration_value': durationValue,
+        'duration_type': durationTypeBackend,
+        'duration': '$durationValue $durationType',
+        'meals_per_day': mealsPerDay,
+        'total_meals': totalMeals,
+        'meals_count': totalMeals,
+        'delivery_frequency': deliveryFrequency,
+        if (startsOn != null && startsOn.isNotEmpty) 'starts_on': startsOn,
+        'taxes_and_disc': '5% GST included',
+        'status': 'ACTIVE',
+      };
+
+      await _restaurantRepository.createPlan(body);
+      subscriptionPlans = await _restaurantRepository.getPlans();
+      _isLoading = false;
+      notifyListeners();
+    } catch (e) {
+      _setError(e.toString());
+      rethrow;
+    }
+  }
+
+  Future<void> updateCustomSubscriptionPlan(
+    int planId, {
+    required String name,
+    required String description,
+    required double price,
+    required String mealType,
+    required int durationValue,
+    required String durationType,
+    required int mealsPerDay,
+    required int totalMeals,
+    required String deliveryFrequency,
+    String? startsOn,
+  }) async {
+    _setLoading(true);
+    try {
+      final String durationTypeBackend = durationType.toLowerCase().contains('week')
+          ? 'WEEK'
+          : (durationType.toLowerCase().contains('day') ? 'DAY' : 'MONTH');
+
+      final body = {
+        'name': name,
+        'title': name,
+        'description': description.isNotEmpty ? description : '$totalMeals meals subscription',
+        'price': price,
+        'meal_type': mealType,
+        'duration_value': durationValue,
+        'duration_type': durationTypeBackend,
+        'duration': '$durationValue $durationType',
+        'meals_per_day': mealsPerDay,
+        'total_meals': totalMeals,
+        'meals_count': totalMeals,
+        'delivery_frequency': deliveryFrequency,
+        if (startsOn != null && startsOn.isNotEmpty) 'starts_on': startsOn,
+        'taxes_and_disc': '5% GST included',
+        'status': 'ACTIVE',
+      };
+
+      await _restaurantRepository.updatePlan(planId, body);
+      subscriptionPlans = await _restaurantRepository.getPlans();
+      _isLoading = false;
+      notifyListeners();
+    } catch (e) {
+      _setError(e.toString());
+      rethrow;
     }
   }
 
   Future<void> addSubscriptionPlan(String title, double price, String duration, String mealsCountStr, String mealType, String taxes) async {
     final int meals = int.tryParse(mealsCountStr.replaceAll(RegExp(r'[^0-9]'), '')) ?? 30;
     await _restaurantRepository.createPlan({
-      'restaurant_id': profile?.id ?? 1,
-      'title': title,
+      'name': title,
+      'description': '$meals meals subscription',
       'price': price,
-      'duration': duration,
-      'meals_count': meals,
+      'duration_value': duration.contains('Week') ? 7 : 30,
+      'duration_type': duration.contains('Week') ? 'WEEK' : 'MONTH',
       'meal_type': mealType,
-      'taxes_and_disc': taxes,
-      'is_popular': false,
-      'status': 'Active',
+      'meals_per_day': 1,
+      'total_meals': meals,
+      'delivery_frequency': 'Daily',
+      'status': 'ACTIVE',
     });
     subscriptionPlans = await _restaurantRepository.getPlans();
     notifyListeners();
@@ -382,9 +756,7 @@ class RestaurantStateProvider extends ChangeNotifier {
 
   Future<void> deleteSubscriptionPlan(String title) async {
     final index = subscriptionPlans.indexWhere((p) => p.title == title);
-    if (index >= 0) {
-      await deletePlan(subscriptionPlans[index].id);
-    }
+    if (index >= 0) await deletePlan(subscriptionPlans[index].id);
   }
 
   Future<void> deletePlan(int id) async {
@@ -408,60 +780,6 @@ class RestaurantStateProvider extends ChangeNotifier {
       notifyListeners();
     } catch (e) {
       _setError(e.toString());
-    }
-  }
-
-  // --- ADDON MANAGEMENT ACTIONS ---
-
-  Future<int> _getOrCreateAddonsCategoryId() async {
-    final cat = addonsCategory;
-    if (cat != null) {
-      return cat.id;
-    }
-    // Create Category named "Add-ons"
-    await createCategory('Add-ons', 'Extra side dishes and beverages', 'active');
-    final newCat = addonsCategory;
-    return newCat?.id ?? 1;
-  }
-
-  Future<void> addAddon(String title, double price, int qty, bool isVeg) async {
-    _setLoading(true);
-    try {
-      final categoryId = await _getOrCreateAddonsCategoryId();
-      await addMenuItem({
-        'category_id': categoryId.toString(),
-        'restaurant_id': profile?.id.toString() ?? '1',
-        'name': title,
-        'description': 'Add-on item',
-        'price': price.toString(),
-        'veg_type': isVeg ? 'VEG' : 'NON_VEG',
-        'availability': '1',
-        'status': 'Active',
-      });
-    } catch (e) {
-      _setError(e.toString());
-      rethrow;
-    }
-  }
-
-  Future<void> toggleAddonActiveToday(String title) async {
-    final index = menuItems.indexWhere((item) => item.name == title);
-    if (index >= 0) {
-      await toggleMenuItemActive(menuItems[index]);
-    }
-  }
-
-  Future<void> toggleAddonActiveTomorrow(String title) async {
-    final index = menuItems.indexWhere((item) => item.name == title);
-    if (index >= 0) {
-      await toggleMenuItemActive(menuItems[index]);
-    }
-  }
-
-  Future<void> deleteAddon(String title) async {
-    final index = menuItems.indexWhere((item) => item.name == title);
-    if (index >= 0) {
-      await deleteMenuItem(menuItems[index].id);
     }
   }
 }

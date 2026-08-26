@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../bloc/restaurant_state_provider.dart';
 import 'restaurant_dashboard_screen.dart';
+import 'restaurant_add_plan_screen.dart';
 
 class RestaurantPlansScreen extends StatefulWidget {
   const RestaurantPlansScreen({super.key});
@@ -12,121 +13,22 @@ class RestaurantPlansScreen extends StatefulWidget {
 class _RestaurantPlansScreenState extends State<RestaurantPlansScreen> {
   String _selectedTab = 'All Plans';
 
-  // Dialog Controllers
-  final _titleController = TextEditingController();
-  final _priceController = TextEditingController();
-  final _durationController = TextEditingController();
-  final _mealsController = TextEditingController();
-  final _taxesController = TextEditingController();
-  String _dialogMealType = 'Veg / Non-Veg';
-
-  @override
-  void dispose() {
-    _titleController.dispose();
-    _priceController.dispose();
-    _durationController.dispose();
-    _mealsController.dispose();
-    _taxesController.dispose();
-    super.dispose();
-  }
-
-  void _showAddPlanDialog(RestaurantStateProvider state) {
-    _titleController.clear();
-    _priceController.clear();
-    _durationController.clear();
-    _mealsController.clear();
-    _taxesController.clear();
-    _dialogMealType = 'Veg / Non-Veg';
-
-    showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) {
-          const Color merchantGreen = Color(0xFF00A859);
-
-          return AlertDialog(
-            title: const Text('Create Subscription Plan'),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  TextField(
-                    controller: _titleController,
-                    decoration: const InputDecoration(labelText: 'Plan Title', hintText: 'e.g. 15 Days Plan'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _priceController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'Price (₹)', hintText: 'e.g. 1800'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _durationController,
-                    decoration: const InputDecoration(labelText: 'Duration', hintText: 'e.g. 15 Days'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _mealsController,
-                    decoration: const InputDecoration(labelText: 'Meals Count', hintText: 'e.g. 15 Meals'),
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    value: _dialogMealType,
-                    decoration: const InputDecoration(labelText: 'Meal Type'),
-                    items: ['Veg / Non-Veg', 'Pure Veg', 'Non-Veg Only'].map((type) {
-                      return DropdownMenuItem(value: type, child: Text(type));
-                    }).toList(),
-                    onChanged: (val) {
-                      if (val != null) {
-                        setDialogState(() {
-                          _dialogMealType = val;
-                        });
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _taxesController,
-                    decoration: const InputDecoration(labelText: 'Discount & Taxes', hintText: 'e.g. 5% Off + 5% GST'),
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
-              ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: merchantGreen, foregroundColor: Colors.white),
-                onPressed: () {
-                  final String title = _titleController.text.trim();
-                  final double price = double.tryParse(_priceController.text) ?? 0.0;
-                  final String duration = _durationController.text.trim();
-                  final String meals = _mealsController.text.trim();
-                  final String taxes = _taxesController.text.trim();
-
-                  if (title.isNotEmpty && price > 0 && duration.isNotEmpty) {
-                    state.addSubscriptionPlan(title, price, duration, meals, _dialogMealType, taxes.isEmpty ? '5% GST' : taxes);
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Plan "$title" created!')),
-                    );
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Please fill all fields.')),
-                    );
-                  }
-                },
-                child: const Text('Create Plan'),
-              ),
-            ],
-          );
-        },
+  void _openAddPlanScreen(
+    RestaurantStateProvider state, {
+    Map<String, dynamic>? existingPlan,
+    bool isEdit = false,
+  }) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => RestaurantAddPlanScreen(
+          stateProvider: state,
+          existingPlan: existingPlan,
+          isEdit: isEdit,
+        ),
       ),
     );
+    await state.fetchPlans();
   }
 
   @override
@@ -148,35 +50,14 @@ class _RestaurantPlansScreenState extends State<RestaurantPlansScreen> {
         centerTitle: true,
         actions: [
           IconButton(
-            icon: const Icon(Icons.notifications_none, color: Color(0xFF4B5563)),
-            onPressed: () {},
+            icon: const Icon(Icons.add, color: Color(0xFF4B5563)),
+            onPressed: () => _openAddPlanScreen(state),
           ),
         ],
       ),
       body: Column(
         children: [
-          // 1. Top Create Button
-          Container(
-            color: Colors.white,
-            padding: const EdgeInsets.all(16),
-            child: SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: merchantGreen,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-                onPressed: () => _showAddPlanDialog(state),
-                icon: const Icon(Icons.add_card_outlined),
-                label: const Text('Create Subscription Plan', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-              ),
-            ),
-          ),
-          
-          // 2. Tab filters
+          // Tab filters
           Container(
             color: Colors.white,
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -217,7 +98,7 @@ class _RestaurantPlansScreenState extends State<RestaurantPlansScreen> {
             ),
           ),
           
-          // 3. Plans List
+          // Plans List
           Expanded(
             child: ListView.builder(
               physics: const BouncingScrollPhysics(),
@@ -238,7 +119,6 @@ class _RestaurantPlansScreenState extends State<RestaurantPlansScreen> {
                 final String mealType = plan['mealType'];
                 final String taxes = plan['taxesAndDisc'];
                 final bool isPopular = plan['isPopular'];
-                final bool isActive = plan['isActive'];
 
                 return Container(
                   margin: const EdgeInsets.only(bottom: 20),
@@ -295,7 +175,7 @@ class _RestaurantPlansScreenState extends State<RestaurantPlansScreen> {
                               ],
                             ),
                             Text(
-                              '₹${price.toStringAsFixed(0)}$period',
+                              '£${price.toStringAsFixed(2)}$period',
                               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: merchantGreen),
                             ),
                           ],
@@ -328,7 +208,7 @@ class _RestaurantPlansScreenState extends State<RestaurantPlansScreen> {
                             Expanded(
                               child: OutlinedButton(
                                 style: OutlinedButton.styleFrom(side: const BorderSide(color: Color(0xFFE5E7EB)), foregroundColor: const Color(0xFF4B5563)),
-                                onPressed: () {},
+                                onPressed: () => _openAddPlanScreen(state, existingPlan: plan, isEdit: true),
                                 child: const Text('View'),
                               ),
                             ),
@@ -336,7 +216,7 @@ class _RestaurantPlansScreenState extends State<RestaurantPlansScreen> {
                             Expanded(
                               child: OutlinedButton(
                                 style: OutlinedButton.styleFrom(side: const BorderSide(color: Color(0xFFE5E7EB)), foregroundColor: const Color(0xFF4B5563)),
-                                onPressed: () {},
+                                onPressed: () => _openAddPlanScreen(state, existingPlan: plan, isEdit: true),
                                 child: const Text('Edit'),
                               ),
                             ),
@@ -398,11 +278,11 @@ class _RestaurantPlansScreenState extends State<RestaurantPlansScreen> {
       height: 120,
       child: OutlinedButton(
         style: OutlinedButton.styleFrom(
-          side: BorderSide(color: merchantGreen.withOpacity(0.4), width: 1.5, style: BorderStyle.values[1]), // Dashed border representation
+          side: BorderSide(color: merchantGreen.withOpacity(0.4), width: 1.5, style: BorderStyle.values[1]),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           backgroundColor: Colors.white,
         ),
-        onPressed: () => _showAddPlanDialog(state),
+        onPressed: () => _openAddPlanScreen(state),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: const [
