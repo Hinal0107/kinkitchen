@@ -5,6 +5,7 @@ class User {
   final String email;
   final String phone;
   final String role; // 'restaurant' or 'customer'
+  final int? selectedRestaurantId;
 
   User({
     required this.id,
@@ -13,6 +14,7 @@ class User {
     required this.email,
     required this.phone,
     required this.role,
+    this.selectedRestaurantId,
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
@@ -23,6 +25,14 @@ class User {
       return 0;
     }
 
+    int? toNullableInt(dynamic val) {
+      if (val == null) return null;
+      if (val is int) return val;
+      if (val is num) return val.toInt();
+      if (val is String) return int.tryParse(val);
+      return null;
+    }
+
     return User(
       id: toInt(json['id']),
       uid: json['firebase_uid']?.toString() ?? json['uid']?.toString() ?? '',
@@ -30,6 +40,7 @@ class User {
       email: json['email']?.toString() ?? '',
       phone: json['phone']?.toString() ?? '',
       role: (json['role']?.toString() ?? 'customer').toLowerCase(),
+      selectedRestaurantId: toNullableInt(json['selected_restaurant_id'] ?? json['restaurant_id']),
     );
   }
 
@@ -41,6 +52,7 @@ class User {
       'email': email,
       'phone': phone,
       'role': role,
+      'selected_restaurant_id': selectedRestaurantId,
     };
   }
 }

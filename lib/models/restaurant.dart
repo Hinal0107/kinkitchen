@@ -13,6 +13,10 @@ class Restaurant {
   final String closingTime;
   final String? logoUrl;
   final String status;
+  final double taxPercentage;
+  final double? latitude;
+  final double? longitude;
+  final double? serviceRadiusKm;
 
   Restaurant({
     required this.id,
@@ -29,6 +33,10 @@ class Restaurant {
     required this.closingTime,
     this.logoUrl,
     required this.status,
+    this.taxPercentage = 0.0,
+    this.latitude,
+    this.longitude,
+    this.serviceRadiusKm,
   });
 
   factory Restaurant.fromJson(Map<String, dynamic> json) {
@@ -37,6 +45,21 @@ class Restaurant {
       if (val is num) return val.toInt();
       if (val is String) return int.tryParse(val) ?? 0;
       return 0;
+    }
+
+    double toDouble(dynamic val) {
+      if (val is double) return val;
+      if (val is num) return val.toDouble();
+      if (val is String) return double.tryParse(val) ?? 0.0;
+      return 0.0;
+    }
+
+    double? toNullableDouble(dynamic val) {
+      if (val == null) return null;
+      if (val is double) return val;
+      if (val is num) return val.toDouble();
+      if (val is String) return double.tryParse(val);
+      return null;
     }
 
     return Restaurant(
@@ -54,6 +77,10 @@ class Restaurant {
       closingTime: json['closing_time']?.toString() ?? '',
       logoUrl: json['logoUrl']?.toString() ?? json['logo_url']?.toString() ?? json['logo']?.toString(),
       status: json['status']?.toString() ?? 'ACTIVE',
+      taxPercentage: toDouble(json['tax_percentage'] ?? json['gst_percentage'] ?? json['tax_rate']),
+      latitude: toNullableDouble(json['latitude'] ?? json['lat']),
+      longitude: toNullableDouble(json['longitude'] ?? json['lng']),
+      serviceRadiusKm: toNullableDouble(json['service_radius_km'] ?? json['service_radius']),
     );
   }
 
@@ -73,6 +100,10 @@ class Restaurant {
       'closing_time': closingTime,
       'logo_url': logoUrl,
       'status': status,
+      'tax_percentage': taxPercentage,
+      'latitude': latitude,
+      'longitude': longitude,
+      'service_radius_km': serviceRadiusKm,
     };
   }
 }

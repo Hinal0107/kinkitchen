@@ -11,12 +11,36 @@ class CustomerRepository {
 
   CustomerRepository({ApiClient? apiClient}) : _apiClient = apiClient ?? ApiClient();
 
-  // 1. Browse Active Restaurants
-  Future<List<Restaurant>> getRestaurants() async {
-    final response = await _apiClient.get(ApiConfig.restaurants);
+  // 1. Browse Active Restaurants (Filtered by nearby area/city/pincode/coords and status)
+  Future<List<Restaurant>> getRestaurants({
+    String? city,
+    String? pincode,
+    double? latitude,
+    double? longitude,
+    String status = 'ACTIVE',
+  }) async {
+    final queryParams = {
+      if (city != null && city.isNotEmpty) 'city': city,
+      if (pincode != null && pincode.isNotEmpty) 'pincode': pincode,
+      if (latitude != null) 'latitude': latitude.toString(),
+      if (longitude != null) 'longitude': longitude.toString(),
+      if (status.isNotEmpty) 'status': status,
+    };
+    final response = await _apiClient.get(
+      ApiConfig.restaurants,
+      queryParameters: queryParams.isNotEmpty ? queryParams : null,
+    );
     final data = response['data'] ?? response['restaurants'];
     final List<dynamic> list = (data is List ? data : (data is Map && data.containsKey('data') ? data['data'] : [])) ?? [];
     return list.map((json) => Restaurant.fromJson(json as Map<String, dynamic>)).toList();
+  }
+
+  // 1b. Select & Persist Customer's Selected Restaurant
+  Future<void> setSelectedRestaurant(int restaurantId) async {
+    await _apiClient.post(
+      '/customer/selected-restaurant',
+      body: {'restaurant_id': restaurantId},
+    );
   }
 
   // 2. Get Restaurant Details

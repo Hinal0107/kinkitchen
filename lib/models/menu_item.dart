@@ -11,6 +11,7 @@ class MenuItem {
   final String status; // 'ACTIVE', 'INACTIVE'
   final String? imageUrl;
   final String? scheduleDate;
+  final bool isAddon;
 
   MenuItem({
     required this.id,
@@ -25,6 +26,7 @@ class MenuItem {
     required this.status,
     this.imageUrl,
     this.scheduleDate,
+    this.isAddon = false,
   });
 
   factory MenuItem.fromJson(Map<String, dynamic> json) {
@@ -46,7 +48,7 @@ class MenuItem {
       if (val is bool) return val;
       if (val is int) return val == 1;
       if (val is String) return val == '1' || val.toLowerCase() == 'true';
-      return true;
+      return false;
     }
 
     return MenuItem(
@@ -58,10 +60,11 @@ class MenuItem {
       price: toDouble(json['price']),
       discountPrice: toDouble(json['discount_price']),
       vegType: json['veg_type']?.toString() ?? 'VEG',
-      availability: toBool(json['availability']),
+      availability: toBool(json['availability'] ?? true),
       status: json['status']?.toString() ?? 'ACTIVE',
       imageUrl: json['imageUrl']?.toString() ?? json['image_url']?.toString() ?? json['image']?.toString(),
       scheduleDate: json['schedule_date']?.toString(),
+      isAddon: toBool(json['is_addon']),
     );
   }
 
@@ -79,6 +82,7 @@ class MenuItem {
       'status': status,
       'image_url': imageUrl,
       'schedule_date': scheduleDate,
+      'is_addon': isAddon ? 1 : 0,
     };
   }
 }
