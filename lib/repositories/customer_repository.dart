@@ -86,34 +86,220 @@ class CustomerRepository {
     return MenuItem.fromJson(data as Map<String, dynamic>);
   }
 
+  List<dynamic> _extractList(dynamic response, [String? key]) {
+    if (response == null) return [];
+    if (response is List) return response;
+    if (response is Map) {
+      // 1. Direct specified key check
+      if (key != null && response.containsKey(key)) {
+        final val = response[key];
+        if (val is List) return val;
+        if (val is Map && val.containsKey('data') && val['data'] is List) {
+          return val['data'] as List;
+        }
+      }
+      // 2. Direct 'data' key check
+      if (response.containsKey('data')) {
+        final data = response['data'];
+        if (data is List) return data;
+        if (data is Map) {
+          if (key != null && data.containsKey(key) && data[key] is List) {
+            return data[key] as List;
+          }
+          for (final value in data.values) {
+            if (value is List) return value;
+          }
+        }
+      }
+      // 3. Fallback scan for common array keys
+      for (final k in ['daily_meals', 'meals', 'today_meals', 'tomorrow_meals', 'addons', 'add_ons', 'menu_items', 'items', 'categories', 'plans', 'restaurants']) {
+        if (response.containsKey(k) && response[k] is List) {
+          return response[k] as List;
+        }
+      }
+      // 4. Any list at root level
+      for (final value in response.values) {
+        if (value is List) return value;
+      }
+    }
+    return [];
+  }
+
+  // Fetch All Daily Meals for a Restaurant from GET /restaurants/{id}/daily-meals
+  Future<List<MenuItem>> getAllDailyMeals(int restaurantId) async {
+    // 1. Try GET /restaurants/{id}/daily-meals
+    try {
+      final response = await _apiClient.get(ApiConfig.dailyMeals(restaurantId));
+      final list = _extractList(response, 'daily_meals');
+      if (list.isNotEmpty) {
+        return list.map((json) => MenuItem.fromJson(json as Map<String, dynamic>)).toList();
+      }
+    } catch (_) {}
+
+    // 2. Try GET /daily-meals
+    try {
+      final response = await _apiClient.get('/daily-meals');
+      final list = _extractList(response, 'daily_meals');
+      if (list.isNotEmpty) {
+        return list.map((json) => MenuItem.fromJson(json as Map<String, dynamic>)).toList();
+      }
+    } catch (_) {}
+
+    // 3. Try GET /restaurant/daily-meals
+    try {
+      final response = await _apiClient.get(ApiConfig.restaurantDailyMeals);
+      final list = _extractList(response, 'daily_meals');
+      if (list.isNotEmpty) {
+        return list.map((json) => MenuItem.fromJson(json as Map<String, dynamic>)).toList();
+      }
+    } catch (_) {}
+
+    return [];
+  }
+
   // 6. Get Restaurant Addons
   Future<List<MenuItem>> getRestaurantAddons(int restaurantId) async {
-    final response = await _apiClient.get(ApiConfig.restaurantAddons(restaurantId));
-    final data = response['data'] ?? response['addons'];
-    final List<dynamic> list = (data is List ? data : (data is Map && data.containsKey('data') ? data['data'] : [])) ?? [];
-    return list.map((json) => MenuItem.fromJson(json as Map<String, dynamic>)).toList();
+    final Map<int, MenuItem> map = {};
+
+    // 1. Fetch from GET /restaurants/{id}/addons
+    try {
+      final response = await _apiClient.get(ApiConfig.restaurantAddons(restaurantId));
+      final list = _extractList(response, 'addons');
+      for (final json in list) {
+        if (json is Map<String, dynamic>) {
+          final item = MenuItem.fromJson(json);
+          map[item.id] = item;
+        }
+      }
+    } catch (_) {}
+
+    // 2. Check GET /restaurants/{id}/daily-meals for items with meal_type == 'ADDON' or isAddon == true
+    try {
+      final allDaily = await getAllDailyMeals(restaurantId);
+      for (final item in allDaily) {
+        if (item.isAddon || item.mealType?.toUpperCase() == 'ADDON') {
+          map[item.id] = item;
+        }
+      }
+    } catch (_) {}
+
+    // 3. Fallback: menu items with isAddon == true
+    try {
+      final menu = await getRestaurantMenu(restaurantId);
+      for (final item in menu) {
+        if (item.isAddon || item.name.toLowerCase().contains('addon') || item.name.toLowerCase().contains('add-on')) {
+          map[item.id] = item;
+        }
+      }
+    } catch (_) {}
+
+    return map.values.toList();
   }
 
   // 7. Get Restaurant Taxes
   Future<Map<String, dynamic>> getRestaurantTaxes(int restaurantId) async {
-    final response = await _apiClient.get(ApiConfig.restaurantTaxes(restaurantId));
-    return (response['data'] ?? response) as Map<String, dynamic>;
+    try {
+      final response = await _apiClient.get(ApiConfig.restaurantTaxes(restaurantId));
+      return (response['data'] ?? response) as Map<String, dynamic>;
+    } catch (_) {
+      return {'tax_rate': 5.0};
+    }
   }
 
   // 8. Get Today's Meal
   Future<List<MenuItem>> getTodayMeal(int restaurantId) async {
-    final response = await _apiClient.get(ApiConfig.todayMeal(restaurantId));
-    final data = response['data'] ?? response['meals'];
-    final List<dynamic> list = (data is List ? data : (data is Map && data.containsKey('data') ? data['data'] : [])) ?? [];
-    return list.map((json) => MenuItem.fromJson(json as Map<String, dynamic>)).toList();
+    final Map<int, MenuItem> map = {};
+    final String todayDateStr = DateTime.now().toString().split(' ').first;
+
+    // 1. Fetch from GET /restaurants/{id}/daily-meals & filter TODAY or today's date
+    final allDaily = await getAllDailyMeals(restaurantId);
+    for (final item in allDaily) {
+      final mType = item.mealType?.toUpperCase();
+      final sDate = item.scheduleDate;
+      if (mType == 'TODAY' || sDate == todayDateStr || (mType == null || mType.isEmpty)) {
+        if (mType != 'TOMORROW' && mType != 'ADDON') {
+          map[item.id] = item;
+        }
+      }
+    }
+
+    // 2. Also fetch from GET /restaurants/{id}/today-meal
+    try {
+      final response = await _apiClient.get(ApiConfig.todayMeal(restaurantId));
+      final list = _extractList(response, 'today_meals');
+      for (final json in list) {
+        if (json is Map<String, dynamic>) {
+          final item = MenuItem.fromJson(json);
+          map[item.id] = item;
+        }
+      }
+    } catch (_) {}
+
+    // Fallback: If map is still empty but allDaily has non-addon items, return them
+    if (map.isEmpty && allDaily.isNotEmpty) {
+      final nonAddons = allDaily.where((i) => !i.isAddon && i.mealType?.toUpperCase() != 'ADDON').toList();
+      return nonAddons.isNotEmpty ? nonAddons : allDaily;
+    }
+
+    return map.values.toList();
   }
 
   // 9. Get Tomorrow's Meal
   Future<List<MenuItem>> getTomorrowMeal(int restaurantId) async {
-    final response = await _apiClient.get(ApiConfig.tomorrowMeal(restaurantId));
-    final data = response['data'] ?? response['meals'];
-    final List<dynamic> list = (data is List ? data : (data is Map && data.containsKey('data') ? data['data'] : [])) ?? [];
-    return list.map((json) => MenuItem.fromJson(json as Map<String, dynamic>)).toList();
+    final Map<int, MenuItem> map = {};
+    final String tomorrowDateStr = DateTime.now().add(const Duration(days: 1)).toString().split(' ').first;
+
+    // 1. Fetch from GET /restaurants/{id}/daily-meals & filter TOMORROW or tomorrow's date
+    final allDaily = await getAllDailyMeals(restaurantId);
+    for (final item in allDaily) {
+      final mType = item.mealType?.toUpperCase();
+      final sDate = item.scheduleDate;
+      if (mType == 'TOMORROW' || sDate == tomorrowDateStr) {
+        map[item.id] = item;
+      }
+    }
+
+    // 2. Also fetch from GET /restaurants/{id}/tomorrow-meal
+    try {
+      final response = await _apiClient.get(ApiConfig.tomorrowMeal(restaurantId));
+      final list = _extractList(response, 'tomorrow_meals');
+      for (final json in list) {
+        if (json is Map<String, dynamic>) {
+          final item = MenuItem.fromJson(json);
+          map[item.id] = item;
+        }
+      }
+    } catch (_) {}
+
+    return map.values.toList();
+  }
+
+  // 9b. Get Weekly Meal Plan
+  Future<List<MenuItem>> getWeeklyMeal(int restaurantId) async {
+    final Map<int, MenuItem> map = {};
+
+    // 1. Fetch from GET /restaurants/{id}/daily-meals & filter WEEKLY
+    final allDaily = await getAllDailyMeals(restaurantId);
+    for (final item in allDaily) {
+      final mType = item.mealType?.toUpperCase();
+      if (mType == 'WEEKLY') {
+        map[item.id] = item;
+      }
+    }
+
+    // 2. Also fetch from GET /restaurants/{id}/weekly-meal
+    try {
+      final response = await _apiClient.get(ApiConfig.weeklyMeal(restaurantId));
+      final list = _extractList(response, 'weekly_meals');
+      for (final json in list) {
+        if (json is Map<String, dynamic>) {
+          final item = MenuItem.fromJson(json);
+          map[item.id] = item;
+        }
+      }
+    } catch (_) {}
+
+    return map.values.toList();
   }
 
   // 10. Get Daily Meals by date (e.g. 2026-08-25)
@@ -122,16 +308,14 @@ class CustomerRepository {
       ApiConfig.dailyMeals(restaurantId),
       queryParameters: {'date': date},
     );
-    final data = response['data'] ?? response['meals'];
-    final List<dynamic> list = (data is List ? data : (data is Map && data.containsKey('data') ? data['data'] : [])) ?? [];
+    final list = _extractList(response, 'daily_meals');
     return list.map((json) => MenuItem.fromJson(json as Map<String, dynamic>)).toList();
   }
 
   // 11. Get Subscription Plans for a Restaurant
   Future<List<SubscriptionPlan>> getRestaurantPlans(int restaurantId) async {
     final response = await _apiClient.get(ApiConfig.restaurantPlans(restaurantId));
-    final data = response['data'] ?? response['plans'];
-    final List<dynamic> list = (data is List ? data : (data is Map && data.containsKey('data') ? data['data'] : [])) ?? [];
+    final list = _extractList(response, 'plans');
     return list.map((json) => SubscriptionPlan.fromJson(json as Map<String, dynamic>)).toList();
   }
 }

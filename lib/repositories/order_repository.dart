@@ -64,6 +64,21 @@ class OrderRepository {
     return (response['data'] ?? response) as Map<String, dynamic>;
   }
 
+  // 5b. Simulate Worldpay Payment (Dev/Sandbox)
+  Future<Map<String, dynamic>> simulateWorldpayPayment({
+    required String orderNumber,
+    String status = 'PAID',
+  }) async {
+    final response = await _apiClient.post(
+      ApiConfig.worldpaySimulate,
+      body: {
+        'order_number': orderNumber,
+        'status': status,
+      },
+    );
+    return (response['data'] ?? response) as Map<String, dynamic>;
+  }
+
   // --- 🏪 RESTAURANT ORDERS ---
 
   // 6. List Restaurant Orders

@@ -53,7 +53,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
               TextButton(
                 onPressed: () {
                   Navigator.pop(context); // Close dialog
-                  Navigator.pushNamedAndRemoveUntil(context, '/dashboard', (route) => false);
+                  Navigator.pushNamedAndRemoveUntil(context, '/restaurant-selection', (route) => false);
                 },
                 child: const Text('OK'),
               ),

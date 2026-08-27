@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import '../../../../core/widgets/food_image.dart';
-import '../../../../models/menu_item.dart';
+import '../bloc/tiffin_state_provider.dart';
 import 'dashboard_screen.dart';
+import '../../../../models/menu_item.dart';
+import '../../../../core/config/api_config.dart';
 
 class MenuScreen extends StatefulWidget {
   const MenuScreen({super.key});
@@ -13,6 +14,19 @@ class MenuScreen extends StatefulWidget {
 class _MenuScreenState extends State<MenuScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+  bool _hasFetchedMenu = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final state = TiffinStateScope.of(context);
+    if (!_hasFetchedMenu) {
+      _hasFetchedMenu = true;
+      if (state.selectedRestaurantId != null) {
+        Future.microtask(() => state.fetchRestaurantMenu());
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -23,445 +37,96 @@ class _MenuScreenState extends State<MenuScreen> {
   @override
   Widget build(BuildContext context) {
     final state = TiffinStateScope.of(context);
-    const Color customerOrange = Color(0xFFFF5E00);
-    const Color restaurantGreen = Color(0xFF00A859);
+    const Color brandOrange = Color(0xFFFF5E00);
+    const Color brandGreen = Color(0xFF00A859);
 
-    // 1. Initial State: No Restaurant Selected yet
-    if (state.selectedRestaurantId == null) {
-      return Scaffold(
-        backgroundColor: const Color(0xFFF9FAFB),
-        appBar: AppBar(
-          backgroundColor: Colors.white,
-          elevation: 0,
-          title: const Text('Restaurant Menu', style: TextStyle(color: Color(0xFF1F2937))),
-          centerTitle: true,
-        ),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(32.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.store_outlined, size: 64, color: Color(0xFFD1D5DB)),
-                const SizedBox(height: 16),
-                const Text(
-                  'No Restaurant Selected',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1F2937)),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Please select a restaurant from the Home tab to browse their kitchen menu.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 13, color: Color(0xFF6B7280), height: 1.4),
-                ),
-                const SizedBox(height: 24),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: customerOrange),
-                  onPressed: () {
-                    // Go to Home screen (tab index 0)
-                    context.findAncestorStateOfType<DashboardScreenState>()?.setTab(0);
-                  },
-                  child: const Text('Browse Restaurants'),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    // 2. Loading State
-    if (state.isLoading) {
-      return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(color: customerOrange),
-        ),
-      );
-    }
-
-    // 3. Error State
-    if (state.errorMessage != null) {
-      return Scaffold(
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.error_outline, size: 52, color: Colors.red),
-                const SizedBox(height: 16),
-                Text(
-                  state.errorMessage!,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Color(0xFF4B5563), fontSize: 14),
-                ),
-                const SizedBox(height: 20),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: customerOrange),
-                  onPressed: () => state.fetchRestaurantDetails(state.selectedRestaurantId!),
-                  child: const Text('Retry'),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    // 4. Access Control State: Free Trial Expired & No Active Subscription
-    if (!state.canAccessMeals && state.activeSubscription == 'None') {
-      return Scaffold(
-        backgroundColor: const Color(0xFFF9FAFB),
-        appBar: AppBar(
-          backgroundColor: Colors.white,
-          elevation: 0,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back, color: Color(0xFF1F2937)),
-            onPressed: () {
-              context.findAncestorStateOfType<DashboardScreenState>()?.setTab(0);
-            },
-          ),
-          title: const Text('Menu Access Restricted', style: TextStyle(color: Color(0xFF1F2937), fontWeight: FontWeight.bold, fontSize: 18)),
-          centerTitle: true,
-        ),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(32.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: customerOrange.withOpacity(0.08),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.lock_clock_outlined, size: 64, color: customerOrange),
-                ),
-                const SizedBox(height: 20),
-                const Text(
-                  'Free Trial Expired',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF1F2937)),
-                ),
-                const SizedBox(height: 10),
-                const Text(
-                  'Your initial 7-day free trial period has ended.\nTo continue viewing meal menus and placing daily tiffin orders, please subscribe to a plan.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 13.5, color: Color(0xFF6B7280), height: 1.5),
-                ),
-                const SizedBox(height: 28),
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: customerOrange,
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                  onPressed: () {
-                    context.findAncestorStateOfType<DashboardScreenState>()?.setTab(2); // Go to Plans tab
-                  },
-                  icon: const Icon(Icons.card_membership_rounded, size: 20),
-                  label: const Text('Browse Subscription Plans', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    // Build lists — exclude special categories (add-ons, today/tomorrow meals)
-    final regularCategories = state.categories.where((cat) {
-      final name = cat.name.toLowerCase();
-      return !name.contains('add-on') &&
-          !name.contains('addon') &&
-          name != 'today' &&
-          name != "today's meals" &&
-          name != 'tomorrow' &&
-          name != "tomorrow's meals";
-    }).toList();
-
-    final List<String> categoriesList = ['All', ...regularCategories.map((c) => c.name)];
-
-    final filteredItems = state.menuItems.where((item) {
-      // Exclude add-on and scheduled meal items
-      final cat = state.categories.where((c) => c.id == item.categoryId).isNotEmpty
-          ? state.categories.firstWhere((c) => c.id == item.categoryId)
-          : null;
-      if (cat != null) {
-        final catName = cat.name.toLowerCase();
-        if (catName.contains('add-on') || catName.contains('addon')) return false;
-        if (catName == 'today' || catName == "today's meals") return false;
-        if (catName == 'tomorrow' || catName == "tomorrow's meals") return false;
-      }
-      // Exclude items with a scheduleDate (today/tomorrow meals)
-      if (item.scheduleDate != null && item.scheduleDate!.isNotEmpty) return false;
-
-      final matchesCategory = state.selectedCategory == 'All' ||
-          regularCategories.any((c) => c.name == state.selectedCategory && c.id == item.categoryId);
-      final matchesSearch = item.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          item.description.toLowerCase().contains(_searchQuery.toLowerCase());
-      return matchesCategory && matchesSearch;
+    // Filter menu items by search query
+    final filteredMenuItems = state.menuItems.where((item) {
+      if (_searchQuery.isEmpty) return true;
+      final query = _searchQuery.toLowerCase();
+      return item.name.toLowerCase().contains(query) ||
+          item.description.toLowerCase().contains(query);
     }).toList();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFB),
       appBar: AppBar(
         backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Color(0xFF1F2937)),
-          onPressed: () {
-            // Clear selection and go back to home tab
-            state.fetchRestaurants();
-            context.findAncestorStateOfType<DashboardScreenState>()?.setTab(0);
-          },
-        ),
-        title: const Text(
-          'Menu',
-          style: TextStyle(color: Color(0xFF1F2937), fontWeight: FontWeight.bold, fontSize: 18),
-        ),
-        centerTitle: true,
-      ),
-      body: Stack(
-        children: [
-          Column(
-            children: [
-              // 1. Search Bar
-              Container(
-                color: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                child: TextField(
-                  controller: _searchController,
-                  onChanged: (val) {
-                    setState(() {
-                      _searchQuery = val;
-                    });
-                  },
-                  decoration: InputDecoration(
-                    hintText: 'Search menu...',
-                    prefixIcon: const Icon(Icons.search, color: Color(0xFF9CA3AF)),
-                    suffixIcon: _searchQuery.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.clear, color: Color(0xFF9CA3AF)),
-                            onPressed: () {
-                              _searchController.clear();
-                              setState(() {
-                                _searchQuery = '';
-                              });
-                            },
-                          )
-                        : null,
-                    fillColor: const Color(0xFFF3F4F6),
-                    filled: true,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
+        elevation: 0.5,
+        titleSpacing: 16,
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'LOCATION',
+              style: TextStyle(
+                color: Color(0xFF9CA3AF),
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 0.8,
+              ),
+            ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.location_on_outlined, color: brandOrange, size: 16),
+                const SizedBox(width: 4),
+                Flexible(
+                  child: Text(
+                    state.selectedRestaurant != null
+                        ? '${state.selectedRestaurant!.name}, ${state.selectedRestaurant!.city}'
+                        : 'Current Location',
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFF1F2937),
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
                 ),
-              ),
-
-              // 2. Category Chips
-              if (regularCategories.isNotEmpty)
-                Container(
-                  height: 52,
-                  color: Colors.white,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    physics: const BouncingScrollPhysics(),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    itemCount: categoriesList.length,
-                    itemBuilder: (context, index) {
-                      final cat = categoriesList[index];
-                      final isSelected = state.selectedCategory == cat;
-                      return GestureDetector(
-                        onTap: () => state.setCategory(cat),
-                        child: Container(
-                          margin: const EdgeInsets.only(right: 10),
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: isSelected ? customerOrange : const Color(0xFFF3F4F6),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            cat,
-                            style: TextStyle(
-                              color: isSelected ? Colors.white : const Color(0xFF4B5563),
-                              fontSize: 13,
-                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-
-              // 3. Menu Items List / Empty States
-              Expanded(
-                child: filteredItems.isEmpty
-                    ? Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(32.0),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: const [
-                              Icon(Icons.restaurant_menu, size: 56, color: Color(0xFFD1D5DB)),
-                              SizedBox(height: 16),
-                              Text(
-                                'No Menu Items Found',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF1F2937),
-                                ),
-                              ),
-                              SizedBox(height: 8),
-                              Text(
-                                'This restaurant has not added any menu items yet.',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
-                              ),
-                            ],
-                          ),
-                        ),
-                      )
-                    : ListView.builder(
-                        physics: const BouncingScrollPhysics(),
-                        padding: EdgeInsets.only(
-                          left: 16,
-                          right: 16,
-                          top: 16,
-                          bottom: state.totalCartCount > 0 ? 80 : 16,
-                        ),
-                        itemCount: filteredItems.length,
-                        itemBuilder: (context, index) {
-                          final MenuItem item = filteredItems[index];
-                          final int qty = state.getItemQuantity(item.id);
-
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 16),
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: const Color(0xFFF3F4F6), width: 1),
-                            ),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                FoodImage(title: item.name, imageUrl: item.imageUrl, width: 90, height: 90, borderRadius: 12),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          _buildVegIndicator(item.vegType),
-                                          const SizedBox(width: 6),
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                            decoration: BoxDecoration(
-                                              color: const Color(0xFFF3F4F6),
-                                              borderRadius: BorderRadius.circular(4),
-                                            ),
-                                            child: Text(
-                                              item.vegType,
-                                              style: const TextStyle(color: Color(0xFF6B7280), fontSize: 10, fontWeight: FontWeight.bold),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        item.name,
-                                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF1F2937)),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        item.description,
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280), height: 1.3),
-                                      ),
-                                      const SizedBox(height: 12),
-                                      Row(
-                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          Text(
-                                            '₹${item.price.toStringAsFixed(2)}',
-                                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: customerOrange),
-                                          ),
-                                          qty == 0
-                                              ? SizedBox(
-                                                  height: 32,
-                                                  child: ElevatedButton(
-                                                    style: ElevatedButton.styleFrom(
-                                                      backgroundColor: customerOrange,
-                                                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                                                    ),
-                                                    onPressed: () {
-                                                      state.addToCart(item);
-                                                    },
-                                                    child: const Text('Add', style: TextStyle(fontSize: 12)),
-                                                  ),
-                                                )
-                                              : Row(
-                                                  children: [
-                                                    GestureDetector(
-                                                      onTap: () => state.removeFromCart(item),
-                                                      child: const Icon(Icons.remove_circle, color: customerOrange, size: 24),
-                                                    ),
-                                                    Padding(
-                                                      padding: const EdgeInsets.symmetric(horizontal: 10.0),
-                                                      child: Text(
-                                                        qty.toString(),
-                                                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-                                                      ),
-                                                    ),
-                                                    GestureDetector(
-                                                      onTap: () => state.addToCart(item),
-                                                      child: const Icon(Icons.add_circle, color: customerOrange, size: 24),
-                                                    ),
-                                                  ],
-                                                ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-              ),
-            ],
+              ],
+            ),
+          ],
+        ),
+        actions: [
+          IconButton(
+            tooltip: 'Notifications',
+            icon: const Icon(Icons.notifications_outlined, color: Color(0xFF1F2937)),
+            onPressed: () {},
           ),
+          IconButton(
+            tooltip: 'Refresh Menu',
+            icon: Icon(Icons.refresh, color: brandOrange),
+            onPressed: () => state.fetchRestaurantMenu(),
+          ),
+        ],
+      ),
+      body: Stack(
+        children: [
+          _buildBody(context, state, filteredMenuItems),
 
-          // 4. Floating View Cart Banner
-          if (state.totalCartCount > 0)
+          // Floating Cart Bar (Matching Screen 2 bottom green pill in design image)
+          if (state.cartItems.isNotEmpty)
             Positioned(
-              left: 16,
-              right: 16,
+              left: 20,
+              right: 20,
               bottom: 16,
               child: GestureDetector(
                 onTap: () {
-                  context.findAncestorStateOfType<DashboardScreenState>()?.setTab(3);
+                  context.findAncestorStateOfType<DashboardScreenState>()?.setTab(3); // Cart Tab
                 },
                 child: Container(
                   height: 52,
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   decoration: BoxDecoration(
-                    color: restaurantGreen,
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
+                    color: brandGreen,
+                    borderRadius: BorderRadius.circular(26),
+                    boxShadow: const [
                       BoxShadow(
-                        color: restaurantGreen.withOpacity(0.3),
+                        color: Color(0x3300A859),
                         blurRadius: 12,
-                        offset: const Offset(0, 4),
+                        offset: Offset(0, 4),
                       ),
                     ],
                   ),
@@ -472,31 +137,37 @@ class _MenuScreenState extends State<MenuScreen> {
                         children: [
                           Container(
                             padding: const EdgeInsets.all(6),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.2),
+                            decoration: const BoxDecoration(
+                              color: Colors.white24,
                               shape: BoxShape.circle,
                             ),
                             child: Text(
                               '${state.totalCartCount}',
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
                             ),
                           ),
                           const SizedBox(width: 12),
                           const Text(
                             'View Cart',
-                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                            ),
                           ),
                         ],
                       ),
-                      Row(
-                        children: [
-                          Text(
-                            '₹${state.subtotal.toStringAsFixed(2)}',
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
-                          ),
-                          const SizedBox(width: 4),
-                          const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 14),
-                        ],
+                      Text(
+                        '£${state.total.toStringAsFixed(2)}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
                       ),
                     ],
                   ),
@@ -508,20 +179,382 @@ class _MenuScreenState extends State<MenuScreen> {
     );
   }
 
-  Widget _buildVegIndicator(String vegType) {
-    final Color color = vegType == 'VEG' || vegType == 'JAIN' ? const Color(0xFF00A859) : const Color(0xFF8B0000);
-    return Container(
-      width: 14,
-      height: 14,
-      decoration: BoxDecoration(
-        border: Border.all(color: color, width: 1.2),
-        borderRadius: BorderRadius.circular(2),
+  Widget _buildBody(BuildContext context, TiffinStateProvider state, List<MenuItem> filteredMenuItems) {
+    const Color brandOrange = Color(0xFFFF5E00);
+
+    if (state.selectedRestaurantId == null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.storefront, size: 64, color: brandOrange),
+              const SizedBox(height: 16),
+              const Text(
+                'Please Select a Kitchen First',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1F2937)),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Select a kitchen to view its full interactive menu and pricing.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Color(0xFF6B7280), fontSize: 14),
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: brandOrange,
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                ),
+                onPressed: () => Navigator.pushNamed(context, '/restaurant-selection'),
+                icon: const Icon(Icons.location_on, color: Colors.white),
+                label: const Text('Browse Kitchens', style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (state.isLoading) {
+      return const Center(
+        child: CircularProgressIndicator(color: brandOrange),
+      );
+    }
+
+    return Column(
+      children: [
+        // Search Bar & Filter Header
+        Container(
+          color: Colors.white,
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          child: Column(
+            children: [
+              // Search Input Box
+              TextField(
+                controller: _searchController,
+                onChanged: (value) {
+                  setState(() {
+                    _searchQuery = value.trim();
+                  });
+                },
+                decoration: InputDecoration(
+                  hintText: 'Search meals...',
+                  hintStyle: const TextStyle(fontSize: 14, color: Color(0xFF9CA3AF)),
+                  prefixIcon: const Icon(Icons.search, color: Color(0xFF9CA3AF)),
+                  suffixIcon: _searchQuery.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear, size: 18, color: Color(0xFF9CA3AF)),
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() {
+                              _searchQuery = '';
+                            });
+                          },
+                        )
+                      : null,
+                  filled: true,
+                  fillColor: const Color(0xFFF3F4F6),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              // Category Filter Chips Carousel
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _buildCategoryChip(state, 'All Items'),
+                    if (state.categories.isNotEmpty)
+                      ...state.categories.map((cat) => _buildCategoryChip(state, cat.name))
+                    else ...[
+                      _buildCategoryChip(state, 'Main Meals'),
+                      _buildCategoryChip(state, 'Sides'),
+                      _buildCategoryChip(state, 'Desserts'),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        const Divider(height: 1),
+
+        // Menu Items List matching Screen 2 design
+        Expanded(
+          child: filteredMenuItems.isEmpty
+              ? _buildEmptyState(state)
+              : ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
+                  itemCount: filteredMenuItems.length,
+                  itemBuilder: (context, index) {
+                    final item = filteredMenuItems[index];
+                    return _buildMenuItemCard(context, state, item);
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCategoryChip(TiffinStateProvider state, String categoryName) {
+    const Color brandOrange = Color(0xFFFF5E00);
+    final String currentCategory = state.selectedCategory.isEmpty ? 'All Items' : state.selectedCategory;
+    final bool isSelected = currentCategory.toLowerCase() == categoryName.toLowerCase() ||
+        (categoryName == 'All Items' && (currentCategory == 'All' || currentCategory == 'All Items'));
+
+    return Padding(
+      padding: const EdgeInsets.only(right: 8.0),
+      child: ChoiceChip(
+        selected: isSelected,
+        label: Text(categoryName),
+        labelStyle: TextStyle(
+          color: isSelected ? Colors.white : const Color(0xFF374151),
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+          fontSize: 13,
+        ),
+        selectedColor: brandOrange,
+        backgroundColor: const Color(0xFFF3F4F6),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide.none,
+        ),
+        onSelected: (selected) {
+          state.setCategory(categoryName == 'All Items' ? 'All' : categoryName);
+        },
       ),
-      alignment: Alignment.center,
-      child: Container(
-        width: 6,
-        height: 6,
-        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+    );
+  }
+
+  // Menu Item Card matching Screen 2 in design image
+  Widget _buildMenuItemCard(BuildContext context, TiffinStateProvider state, MenuItem item) {
+    const Color brandOrange = Color(0xFFFF5E00);
+    final imageUrl = ApiConfig.getFormattedImageUrl(item.imageUrl);
+    final bool isVeg = item.vegType.toUpperCase() == 'VEG';
+    final int qtyInCart = state.getItemQuantity(item.id, itemType: 'Menu Item');
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x08000000),
+            blurRadius: 10,
+            offset: Offset(0, 4),
+          ),
+        ],
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Image with Veg / Bestseller Badge
+          Stack(
+            children: [
+              ClipRRect(
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                child: Container(
+                  height: 140,
+                  width: double.infinity,
+                  color: const Color(0xFFF3F4F6),
+                  child: imageUrl != null
+                      ? Image.network(
+                          imageUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const Center(
+                            child: Icon(Icons.fastfood, size: 44, color: brandOrange),
+                          ),
+                        )
+                      : const Center(
+                          child: Icon(Icons.fastfood, size: 44, color: brandOrange),
+                        ),
+                ),
+              ),
+
+              // Veg/Non-Veg Badge in top right corner
+              Positioned(
+                top: 10,
+                right: 10,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4)],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.circle,
+                        size: 8,
+                        color: isVeg ? Colors.green : Colors.red,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        isVeg ? 'Veg' : 'Non-Veg',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: isVeg ? Colors.green : Colors.red,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Title and Price
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        item.name,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1F2937),
+                        ),
+                      ),
+                    ),
+                    Text(
+                      '£${item.price.toStringAsFixed(2)}',
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFFDC2626),
+                      ),
+                    ),
+                  ],
+                ),
+                if (item.description.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    item.description,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280), height: 1.3),
+                  ),
+                ],
+                const SizedBox(height: 12),
+
+                // Qty Counter or Add Button Row
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.local_fire_department_outlined, size: 14, color: Color(0xFF9CA3AF)),
+                        SizedBox(width: 4),
+                        Text(
+                          'Freshly Prepared',
+                          style: TextStyle(fontSize: 11, color: Color(0xFF9CA3AF)),
+                        ),
+                      ],
+                    ),
+
+                    if (qtyInCart > 0)
+                      Container(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF3F4F6),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          children: [
+                            IconButton(
+                              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                              padding: EdgeInsets.zero,
+                              icon: const Icon(Icons.remove, size: 16, color: Color(0xFF374151)),
+                              onPressed: () {
+                                state.removeFromCart(item, itemType: 'Menu Item');
+                              },
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 6.0),
+                              child: Text(
+                                '$qtyInCart',
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                              ),
+                            ),
+                            IconButton(
+                              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                              padding: EdgeInsets.zero,
+                              icon: Icon(Icons.add, size: 16, color: brandOrange),
+                              onPressed: () {
+                                state.addToCart(item, itemType: 'Menu Item', quantity: 1);
+                              },
+                            ),
+                          ],
+                        ),
+                      )
+                    else
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: brandOrange,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        onPressed: () {
+                          state.addToCart(item, itemType: 'Menu Item', quantity: 1);
+                        },
+                        child: const Text('Add', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(TiffinStateProvider state) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.restaurant_outlined, size: 64, color: Color(0xFF9CA3AF)),
+            const SizedBox(height: 16),
+            Text(
+              _searchQuery.isNotEmpty
+                  ? 'No dishes matching "$_searchQuery"'
+                  : 'No Menu Items Available',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF374151)),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _searchQuery.isNotEmpty
+                  ? 'Try searching with a different keyword or category.'
+                  : 'This kitchen has not added any dishes in this category yet.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Color(0xFF6B7280), fontSize: 13),
+            ),
+          ],
+        ),
       ),
     );
   }

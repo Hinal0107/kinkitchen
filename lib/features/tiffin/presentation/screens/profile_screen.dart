@@ -4,220 +4,357 @@ import '../../../../services/auth_service.dart';
 import '../bloc/tiffin_state_provider.dart';
 import 'dashboard_screen.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  bool _hasFetchedProfile = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final state = TiffinStateScope.of(context);
+    if (!_hasFetchedProfile) {
+      _hasFetchedProfile = true;
+      state.fetchCurrentUserProfile();
+    }
+  }
+
+  void _showEditProfileModal(BuildContext context, TiffinStateProvider state) {
+    final user = state.currentUser;
+    final nameCtrl = TextEditingController(text: user?.name ?? '');
+    final phoneCtrl = TextEditingController(text: user?.phone ?? '');
+    const Color brandOrange = Color(0xFFFF5E00);
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(
+          left: 20,
+          right: 20,
+          top: 20,
+          bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Edit Profile',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1F2937)),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.pop(ctx),
+                ),
+              ],
+            ),
+            const Divider(),
+            const SizedBox(height: 10),
+            TextField(
+              controller: nameCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Full Name',
+                prefixIcon: Icon(Icons.person_outline),
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: phoneCtrl,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(
+                labelText: 'Phone Number',
+                prefixIcon: Icon(Icons.phone_outlined),
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              height: 46,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: brandOrange,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                onPressed: () async {
+                  final name = nameCtrl.text.trim();
+                  final phone = phoneCtrl.text.trim();
+                  if (name.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Name cannot be empty')),
+                    );
+                    return;
+                  }
+                  try {
+                    await state.updateUserProfile(name: name, phone: phone);
+                    if (ctx.mounted) Navigator.pop(ctx);
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Profile updated successfully!')),
+                      );
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Failed to update profile: $e'), backgroundColor: Colors.red),
+                      );
+                    }
+                  }
+                },
+                child: const Text(
+                  'Save Changes',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showDeleteAccountConfirmation(BuildContext context, TiffinStateProvider state) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Account?'),
+        content: const Text(
+          'Are you sure you want to permanently delete your account and profile data? This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              try {
+                await state.deleteUserAccount();
+                await AuthService().logout();
+                if (ctx.mounted) Navigator.pop(ctx);
+                if (mounted) {
+                  Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Your account has been deleted.')),
+                  );
+                }
+              } catch (e) {
+                if (ctx.mounted) Navigator.pop(ctx);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Failed to delete account: $e'), backgroundColor: Colors.red),
+                  );
+                }
+              }
+            },
+            child: const Text('Delete Account', style: TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final state = TiffinStateScope.of(context);
-    const Color customerOrange = Color(0xFFFF5E00);
-    const Color restaurantGreen = Color(0xFF00A859);
+    const Color brandOrange = Color(0xFFFF5E00);
+    const Color brandGreen = Color(0xFF00A859);
+    final user = state.currentUser;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFB),
       appBar: AppBar(
         backgroundColor: Colors.white,
-        elevation: 0,
+        elevation: 0.5,
         title: const Text(
           'My Profile',
           style: TextStyle(
             color: Color(0xFF1F2937),
             fontWeight: FontWeight.bold,
-            fontSize: 20,
+            fontSize: 18,
           ),
         ),
         centerTitle: true,
         actions: [
           IconButton(
-            icon: const Icon(Icons.settings_outlined, color: Color(0xFF4B5563)),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Settings opened')),
-              );
-            },
+            icon: const Icon(Icons.edit_outlined, color: brandOrange),
+            onPressed: () => _showEditProfileModal(context, state),
           ),
         ],
       ),
       body: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         child: Column(
           children: [
-            // 1. User Info Card
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFF3F4F6), width: 1),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.01),
-                    blurRadius: 8,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  // Avatar
-                  Stack(
+            // Logged-in User Profile Header
+            Column(
+              children: [
+                GestureDetector(
+                  onTap: () => _showEditProfileModal(context, state),
+                  child: Stack(
                     children: [
-                      const FoodImage(
-                        title: 'avatar',
-                        width: 72,
-                        height: 72,
-                        borderRadius: 36,
+                      FoodImage(
+                        title: user?.name ?? 'User Avatar',
+                        width: 84,
+                        height: 84,
+                        borderRadius: 42,
                       ),
                       Positioned(
                         right: 0,
                         bottom: 0,
                         child: Container(
-                          padding: const EdgeInsets.all(4),
+                          padding: const EdgeInsets.all(5),
                           decoration: const BoxDecoration(
-                            color: customerOrange,
+                            color: brandOrange,
                             shape: BoxShape.circle,
                           ),
                           child: const Icon(
                             Icons.edit,
                             color: Colors.white,
-                            size: 12,
+                            size: 13,
                           ),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(width: 16),
-                  
-                  // Text details
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'John Doe',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF1F2937),
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        const Text(
-                          '+1 555 000 0000',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Color(0xFF6B7280),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        
-                        // Premium Badge
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: customerOrange.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: const Text(
-                            'Premium Member',
-                            style: TextStyle(
-                              color: customerOrange,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  user?.name ?? 'Customer Account',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1F2937),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  user?.email ?? '',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Color(0xFF6B7280),
+                  ),
+                ),
+                if (user?.phone != null && user!.phone.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    user.phone,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF9CA3AF),
                     ),
                   ),
                 ],
-              ),
+                const SizedBox(height: 8),
+
+                // Member Status Badge
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF7ED),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Text(
+                    user?.role.toUpperCase() ?? 'CUSTOMER MEMBER',
+                    style: const TextStyle(
+                      color: brandOrange,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
             ),
+
             const SizedBox(height: 24),
-            
-            // 2. Options List
+
+            // Options List matching design image
             Container(
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFF3F4F6), width: 1),
+                border: Border.all(color: const Color(0xFFE5E7EB)),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x06000000),
+                    blurRadius: 8,
+                    offset: Offset(0, 2),
+                  ),
+                ],
               ),
               child: Column(
                 children: [
-                  // Subscriptions Option (Dynamic subtitle matching active state)
-                  _buildProfileTile(
+                  _buildOptionTile(
+                    icon: Icons.edit_outlined,
+                    iconColor: brandOrange,
+                    title: 'Edit Profile Data',
+                    subtitle: 'Update name & phone number',
+                    onTap: () => _showEditProfileModal(context, state),
+                  ),
+                  const Divider(height: 1, color: Color(0xFFF3F4F6)),
+
+                  _buildOptionTile(
                     icon: Icons.calendar_month_outlined,
-                    iconColor: restaurantGreen,
+                    iconColor: brandGreen,
                     title: 'My Subscriptions',
                     subtitle: state.activeSubscription == 'None'
-                        ? 'Active: None'
+                        ? 'Active: Weekly Standard'
                         : 'Active: ${state.activeSubscription}',
                     onTap: () {
-                      // Switch to plans screen (index 2)
                       context.findAncestorStateOfType<DashboardScreenState>()?.setTab(2);
                     },
                   ),
                   const Divider(height: 1, color: Color(0xFFF3F4F6)),
-                  
-                  _buildProfileTile(
-                    icon: Icons.history,
-                    iconColor: customerOrange,
-                    title: 'Order History',
-                    onTap: () {},
-                  ),
-                  const Divider(height: 1, color: Color(0xFFF3F4F6)),
 
-                  _buildProfileTile(
+                  _buildOptionTile(
                     icon: Icons.location_on_outlined,
                     iconColor: Colors.blue,
                     title: 'Delivery Addresses',
-                    subtitle: '123 Main Street, Apt 4B',
-                    onTap: () {},
+                    subtitle: state.selectedAddress != null
+                        ? '${state.selectedAddress!.label}: ${state.selectedAddress!.line1}'
+                        : null,
+                    onTap: () => _showAddressManagerModal(context, state),
                   ),
                   const Divider(height: 1, color: Color(0xFFF3F4F6)),
 
-                  _buildProfileTile(
-                    icon: Icons.payment_outlined,
-                    iconColor: Colors.purple,
-                    title: 'Payment Methods',
-                    subtitle: 'Visa ending in 4242',
-                    onTap: () {},
-                  ),
-                  const Divider(height: 1, color: Color(0xFFF3F4F6)),
-
-                  _buildProfileTile(
-                    icon: Icons.help_outline,
-                    iconColor: Colors.teal,
-                    title: 'Help & Support',
-                    onTap: () {},
-                  ),
-                  const Divider(height: 1, color: Color(0xFFF3F4F6)),
-
-                  _buildProfileTile(
+                  _buildOptionTile(
                     icon: Icons.gavel_outlined,
                     iconColor: const Color(0xFF6366F1),
                     title: 'Terms & Conditions',
-                    subtitle: 'Subscription & Add-on Rules',
                     onTap: () {
                       Navigator.pushNamed(context, '/terms-and-conditions');
                     },
                   ),
                   const Divider(height: 1, color: Color(0xFFF3F4F6)),
 
-                  // Logout tile (red color)
-                  _buildProfileTile(
+                  // Logout option
+                  _buildOptionTile(
                     icon: Icons.logout,
-                    iconColor: const Color(0xFFEF4444),
+                    iconColor: const Color(0xFF6B7280),
                     title: 'Logout',
-                    titleColor: const Color(0xFFEF4444),
+                    titleColor: const Color(0xFF374151),
                     showChevron: false,
                     onTap: () {
                       showDialog(
                         context: context,
                         builder: (context) => AlertDialog(
                           title: const Text('Confirm Logout'),
-                          content: const Text('Are you sure you want to log out of KinKitchen?'),
+                          content: const Text('Are you sure you want to log out?'),
                           actions: [
                             TextButton(
                               onPressed: () => Navigator.pop(context),
@@ -226,10 +363,9 @@ class ProfileScreen extends StatelessWidget {
                             TextButton(
                               onPressed: () async {
                                 state.clearCart();
-                                state.cancelSubscription();
                                 await AuthService().logout();
                                 if (!context.mounted) return;
-                                Navigator.pop(context); // Close dialog
+                                Navigator.pop(context);
                                 Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
                               },
                               child: const Text('Logout', style: TextStyle(color: Color(0xFFEF4444))),
@@ -238,6 +374,18 @@ class ProfileScreen extends StatelessWidget {
                         ),
                       );
                     },
+                  ),
+                  const Divider(height: 1, color: Color(0xFFF3F4F6)),
+
+                  // Delete Account option (Red)
+                  _buildOptionTile(
+                    icon: Icons.delete_forever_outlined,
+                    iconColor: const Color(0xFFEF4444),
+                    title: 'Delete Account',
+                    titleColor: const Color(0xFFEF4444),
+                    subtitle: 'Permanently remove profile & data',
+                    showChevron: false,
+                    onTap: () => _showDeleteAccountConfirmation(context, state),
                   ),
                 ],
               ),
@@ -248,7 +396,7 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildProfileTile({
+  Widget _buildOptionTile({
     required IconData icon,
     required Color iconColor,
     required String title,
@@ -285,6 +433,143 @@ class ProfileScreen extends StatelessWidget {
           ? const Icon(Icons.chevron_right, color: Color(0xFF9CA3AF), size: 18)
           : null,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+    );
+  }
+
+  void _showAddressManagerModal(BuildContext context, TiffinStateProvider state) {
+    final labelCtrl = TextEditingController(text: 'Home');
+    final line1Ctrl = TextEditingController();
+    final cityCtrl = TextEditingController(text: 'London');
+    final stateCtrl = TextEditingController(text: 'England');
+    final pinCtrl = TextEditingController(text: 'W1U 7EU');
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) {
+          return Padding(
+            padding: EdgeInsets.only(
+              left: 16,
+              right: 16,
+              top: 16,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Manage Delivery Addresses',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1F2937)),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+                const Divider(),
+                if (state.addresses.isNotEmpty) ...[
+                  const Text('Saved Addresses:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  const SizedBox(height: 6),
+                  Container(
+                    constraints: const BoxConstraints(maxHeight: 140),
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: state.addresses.length,
+                      itemBuilder: (c, i) {
+                        final addr = state.addresses[i];
+                        final isSel = state.selectedAddress?.id == addr.id;
+                        return ListTile(
+                          dense: true,
+                          title: Text('${addr.label}: ${addr.line1}'),
+                          subtitle: Text('${addr.city}, ${addr.state} - ${addr.pincode}'),
+                          trailing: isSel
+                              ? const Icon(Icons.check_circle, color: Color(0xFFFF5E00), size: 20)
+                              : null,
+                          onTap: () {
+                            state.selectedAddress = addr;
+                            setModalState(() {});
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                  const Divider(),
+                ],
+                const Text('Add New Address:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: labelCtrl,
+                        decoration: const InputDecoration(labelText: 'Label (Home/Office)', isDense: true),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: pinCtrl,
+                        decoration: const InputDecoration(labelText: 'Postcode', isDense: true),
+                      ),
+                    ),
+                  ],
+                ),
+                TextField(
+                  controller: line1Ctrl,
+                  decoration: const InputDecoration(labelText: 'Address Line 1', isDense: true),
+                ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: cityCtrl,
+                        decoration: const InputDecoration(labelText: 'City', isDense: true),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: stateCtrl,
+                        decoration: const InputDecoration(labelText: 'County/State', isDense: true),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF5E00)),
+                    onPressed: () async {
+                      if (line1Ctrl.text.trim().isEmpty) return;
+                      await state.createAddress(
+                        label: labelCtrl.text.trim(),
+                        line1: line1Ctrl.text.trim(),
+                        city: cityCtrl.text.trim(),
+                        state: stateCtrl.text.trim(),
+                        pincode: pinCtrl.text.trim(),
+                        isDefault: true,
+                      );
+                      if (ctx.mounted) Navigator.pop(ctx);
+                    },
+                    child: const Text('Save Address', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 }

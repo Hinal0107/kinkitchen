@@ -10,14 +10,21 @@ class AuthRepository {
 
   AuthRepository({ApiClient? apiClient}) : _apiClient = apiClient ?? ApiClient();
 
-  // 1. Register User (CUSTOMER or RESTAURANT)
+  // 1. Register User (customer or restaurant)
   Future<User> register({
     required String name,
     required String email,
     required String phone,
     required String password,
     required String passwordConfirmation,
-    required String role, // CUSTOMER or RESTAURANT
+    required String role, // customer or restaurant
+    String? address,
+    String? city,
+    String? postcode,
+    String? bankHolderName,
+    String? bankAccountNumber,
+    String? bankIfscCode,
+    String? bankBranchName,
   }) async {
     final response = await _apiClient.post(
       ApiConfig.register,
@@ -27,13 +34,26 @@ class AuthRepository {
         'phone': phone,
         'password': password,
         'password_confirmation': passwordConfirmation,
-        'role': role.toUpperCase(),
+        'role': role.toLowerCase(),
+        if (address != null && address.isNotEmpty) 'address_line_1': address,
+        if (city != null && city.isNotEmpty) 'city': city,
+        if (postcode != null && postcode.isNotEmpty) 'pincode': postcode,
+        if (bankHolderName != null && bankHolderName.isNotEmpty) 'bank_account_holder': bankHolderName,
+        if (bankAccountNumber != null && bankAccountNumber.isNotEmpty) 'bank_account_number': bankAccountNumber,
+        if (bankIfscCode != null && bankIfscCode.isNotEmpty) 'bank_ifsc_code': bankIfscCode,
+        if (bankBranchName != null && bankBranchName.isNotEmpty) 'bank_branch_name': bankBranchName,
       },
     );
 
     final data = response['data'] ?? response;
-    final String token = data['token'] as String? ?? '';
-    if (token.isNotEmpty) {
+    String token = data['token'] as String? ?? data['access_token'] as String? ?? '';
+
+    if (token.isEmpty) {
+      // Auto login after registration to obtain Sanctum auth token
+      try {
+        return await login(email: email, password: password);
+      } catch (_) {}
+    } else {
       await _saveTokenAndRole(token, role.toLowerCase(), email);
     }
 
@@ -58,15 +78,15 @@ class AuthRepository {
     );
 
     final data = response['data'] ?? response;
-    final String token = data['token'] as String? ?? '';
+    final String token = data['token'] as String? ?? data['access_token'] as String? ?? '';
     final userJson = data['user'] as Map<String, dynamic>? ?? data as Map<String, dynamic>;
-    final String role = (userJson['role'] as String? ?? 'customer').toLowerCase();
+    final User user = User.fromJson(userJson);
 
     if (token.isNotEmpty) {
-      await _saveTokenAndRole(token, role, email);
+      await _saveTokenAndRole(token, user.role, email);
     }
 
-    return User.fromJson(userJson);
+    return user;
   }
 
   // 3. Get Current User Profile (Me)
@@ -97,6 +117,20 @@ class AuthRepository {
         body: fcmToken != null ? {'fcm_token': fcmToken} : null,
       );
     } catch (_) {}
+    await _secureStorage.delete(key: 'auth_token');
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clear();
+  }
+
+  // 6. Delete User Account/Profile
+  Future<void> deleteAccount() async {
+    try {
+      await _apiClient.delete(ApiConfig.profile);
+    } catch (_) {
+      try {
+        await _apiClient.post('/auth/delete-account');
+      } catch (_) {}
+    }
     await _secureStorage.delete(key: 'auth_token');
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();

@@ -12,6 +12,7 @@ class MenuItem {
   final String? imageUrl;
   final String? scheduleDate;
   final bool isAddon;
+  final String? mealType; // 'TODAY', 'TOMORROW', 'WEEKLY', 'ADDON'
 
   MenuItem({
     required this.id,
@@ -27,6 +28,7 @@ class MenuItem {
     this.imageUrl,
     this.scheduleDate,
     this.isAddon = false,
+    this.mealType,
   });
 
   factory MenuItem.fromJson(Map<String, dynamic> json) {
@@ -59,12 +61,13 @@ class MenuItem {
       description: json['description']?.toString() ?? '',
       price: toDouble(json['price']),
       discountPrice: toDouble(json['discount_price']),
-      vegType: json['veg_type']?.toString() ?? 'VEG',
+      vegType: json['veg_type']?.toString() ?? (json.containsKey('is_veg') ? (toBool(json['is_veg']) ? 'VEG' : 'NON_VEG') : 'VEG'),
       availability: toBool(json['availability'] ?? true),
       status: json['status']?.toString() ?? 'ACTIVE',
       imageUrl: json['imageUrl']?.toString() ?? json['image_url']?.toString() ?? json['image']?.toString(),
-      scheduleDate: json['schedule_date']?.toString(),
-      isAddon: toBool(json['is_addon']),
+      scheduleDate: json['schedule_date']?.toString() ?? json['date']?.toString(),
+      isAddon: toBool(json['is_addon']) || (json['meal_type']?.toString().toUpperCase() == 'ADDON'),
+      mealType: json['meal_type']?.toString(),
     );
   }
 

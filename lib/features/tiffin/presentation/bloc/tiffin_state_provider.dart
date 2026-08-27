@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../repositories/customer_repository.dart';
 import '../../../../repositories/subscription_repository.dart';
 import '../../../../models/restaurant.dart';
@@ -8,19 +9,40 @@ import '../../../../models/subscription_plan.dart';
 import '../../../../models/subscription.dart';
 import '../../../../models/order.dart';
 
+import '../../../../repositories/address_repository.dart';
+import '../../../../repositories/cart_repository.dart';
+import '../../../../repositories/order_repository.dart';
+import '../../../../models/address.dart';
+
+import '../../../../repositories/auth_repository.dart';
+import '../../../../models/user.dart';
+
 class ClientCartItem {
   final MenuItem item;
   int quantity;
+  final String itemType; // 'Today Meal', 'Tomorrow Meal', 'Weekly Meal', 'Add-on', 'Menu Item'
+  final int? cartItemId;
 
   ClientCartItem({
     required this.item,
     this.quantity = 1,
+    this.itemType = 'Menu Item',
+    this.cartItemId,
   });
+
+  double get unitPrice => item.price;
+  double get subtotal => unitPrice * quantity;
 }
 
 class TiffinStateProvider extends ChangeNotifier {
   final CustomerRepository _customerRepository = CustomerRepository();
   final SubscriptionRepository _subscriptionRepository = SubscriptionRepository();
+  final AddressRepository _addressRepository = AddressRepository();
+  final CartRepository _cartRepository = CartRepository();
+  final OrderRepository _orderRepository = OrderRepository();
+  final AuthRepository _authRepository = AuthRepository();
+
+  User? currentUser;
 
   // General Loading & Error States
   bool _isLoading = false;
@@ -29,9 +51,12 @@ class TiffinStateProvider extends ChangeNotifier {
   String? _errorMessage;
   String? get errorMessage => _errorMessage;
 
-  // Active Selected Restaurant ID
+  // Active Selected Restaurant
   int? _selectedRestaurantId;
   int? get selectedRestaurantId => _selectedRestaurantId;
+
+  Restaurant? _selectedRestaurant;
+  Restaurant? get selectedRestaurant => _selectedRestaurant;
 
   // Active Subscription State
   String _activeSubscription = 'None';
@@ -56,9 +81,16 @@ class TiffinStateProvider extends ChangeNotifier {
   // Lists fetched from API
   List<Restaurant> restaurants = [];
   List<MenuCategory> categories = [];
+  List<MenuItem> todayMeals = [];
+  List<MenuItem> tomorrowMeals = [];
+  List<MenuItem> weeklyMeals = [];
+  List<MenuItem> addons = [];
   List<MenuItem> menuItems = [];
   List<SubscriptionPlan> subscriptionPlans = [];
   List<Order> orders = [];
+  List<Address> addresses = [];
+  Address? selectedAddress;
+  Map<String, dynamic> restaurantTaxConfig = {};
 
   // Active Category Chip
   String _selectedCategory = 'All';
@@ -68,9 +100,56 @@ class TiffinStateProvider extends ChangeNotifier {
   final List<ClientCartItem> _cartItems = [];
   List<ClientCartItem> get cartItems => _cartItems;
 
+  TiffinStateProvider() {
+    _loadStoredSelectedRestaurant();
+  }
+
+  Future<void> _loadStoredSelectedRestaurant() async {
+    final prefs = await SharedPreferences.getInstance();
+    _selectedRestaurantId = prefs.getInt('selected_restaurant_id');
+    if (_selectedRestaurantId == null) {
+      try {
+        restaurants = await _customerRepository.getRestaurants();
+        if (restaurants.isNotEmpty) {
+          _selectedRestaurantId = restaurants.first.id;
+          _selectedRestaurant = restaurants.first;
+          await prefs.setInt('selected_restaurant_id', _selectedRestaurantId!);
+        } else {
+          _selectedRestaurantId = 1;
+        }
+      } catch (_) {
+        _selectedRestaurantId = 1;
+      }
+    }
+    await fetchSelectedRestaurantData();
+  }
+
+  Future<void> selectRestaurant(Restaurant restaurant) async {
+    // If switching to a different restaurant, clear previous cart items
+    if (_selectedRestaurantId != null && _selectedRestaurantId != restaurant.id) {
+      _cartItems.clear();
+    }
+    _selectedRestaurantId = restaurant.id;
+    _selectedRestaurant = restaurant;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('selected_restaurant_id', restaurant.id);
+    
+    // Call backend API if endpoint exists
+    try {
+      await _customerRepository.setSelectedRestaurant(restaurant.id);
+    } catch (_) {}
+
+    notifyListeners();
+    await fetchSelectedRestaurantData();
+  }
+
   void setCategory(String category) {
     _selectedCategory = category;
-    notifyListeners();
+    if (_selectedRestaurantId != null) {
+      fetchRestaurantMenu();
+    } else {
+      notifyListeners();
+    }
   }
 
   void _setLoading(bool value) {
@@ -85,13 +164,39 @@ class TiffinStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // Dynamic Tax / GST Percentage from Backend Configuration
+  double get taxRatePercentage {
+    if (restaurantTaxConfig.containsKey('tax_rate')) {
+      final val = restaurantTaxConfig['tax_rate'];
+      if (val is num) return val.toDouble();
+      if (val is String) return double.tryParse(val) ?? 5.0;
+    }
+    if (restaurantTaxConfig.containsKey('gst_percentage')) {
+      final val = restaurantTaxConfig['gst_percentage'];
+      if (val is num) return val.toDouble();
+      if (val is String) return double.tryParse(val) ?? 5.0;
+    }
+    if (restaurantTaxConfig.containsKey('tax_percentage')) {
+      final val = restaurantTaxConfig['tax_percentage'];
+      if (val is num) return val.toDouble();
+      if (val is String) return double.tryParse(val) ?? 5.0;
+    }
+    return 5.0; // Default 5% GST if not specified
+  }
+
   // --- API FETCH CALLS ---
 
-  // 1. Fetch Restaurants & User Access Status
+  // 1. Fetch Restaurants List & Access Status
   Future<void> fetchRestaurants() async {
     _setLoading(true);
     try {
       restaurants = await _customerRepository.getRestaurants();
+      if (_selectedRestaurantId != null && restaurants.isNotEmpty) {
+        final found = restaurants.where((r) => r.id == _selectedRestaurantId);
+        if (found.isNotEmpty) {
+          _selectedRestaurant = found.first;
+        }
+      }
       await fetchAccessStatus();
       _isLoading = false;
       notifyListeners();
@@ -100,23 +205,163 @@ class TiffinStateProvider extends ChangeNotifier {
     }
   }
 
-  // 2. Fetch Restaurant Categories, Menu & Active Subscription
+  // 2. Fetch All Data for Currently Selected Restaurant
   Future<void> fetchRestaurantDetails(int restaurantId) async {
-    _setLoading(true);
     _selectedRestaurantId = restaurantId;
+    await fetchSelectedRestaurantData();
+  }
+
+  Future<void> fetchSelectedRestaurantData() async {
+    if (_selectedRestaurantId == null) {
+      _selectedRestaurantId = 1;
+    }
+    _setLoading(true);
     try {
-      categories = await _customerRepository.getRestaurantCategories(restaurantId);
-      menuItems = await _customerRepository.getRestaurantMenu(
-        restaurantId,
-        category: _selectedCategory,
-      );
-      subscriptionPlans = await _customerRepository.getRestaurantPlans(restaurantId);
+      final resId = _selectedRestaurantId!;
+      // Fetch details in parallel / sequence
+      try {
+        _selectedRestaurant = await _customerRepository.getRestaurantDetails(resId);
+      } catch (_) {}
+
+      try {
+        categories = await _customerRepository.getRestaurantCategories(resId);
+      } catch (_) {}
+
+      try {
+        todayMeals = await _customerRepository.getTodayMeal(resId);
+      } catch (_) {
+        todayMeals = [];
+      }
+
+      try {
+        tomorrowMeals = await _customerRepository.getTomorrowMeal(resId);
+      } catch (_) {
+        tomorrowMeals = [];
+      }
+
+      try {
+        weeklyMeals = await _customerRepository.getWeeklyMeal(resId);
+      } catch (_) {
+        weeklyMeals = [];
+      }
+
+      try {
+        addons = await _customerRepository.getRestaurantAddons(resId);
+      } catch (_) {
+        addons = [];
+      }
+
+      try {
+        menuItems = await _customerRepository.getRestaurantMenu(resId, category: _selectedCategory);
+      } catch (_) {
+        menuItems = [];
+      }
+
+      try {
+        subscriptionPlans = await _customerRepository.getRestaurantPlans(resId);
+      } catch (_) {
+        subscriptionPlans = [];
+      }
+
+      try {
+        restaurantTaxConfig = await _customerRepository.getRestaurantTaxes(resId);
+      } catch (_) {
+        restaurantTaxConfig = {};
+      }
+
+      await fetchAddresses();
       await fetchAccessStatus();
+      await fetchCurrentUserProfile();
       _isLoading = false;
       notifyListeners();
     } catch (e) {
       _setError(e.toString());
     }
+  }
+
+  // --- USER PROFILE MANAGEMENT ---
+  Future<void> fetchCurrentUserProfile() async {
+    try {
+      currentUser = await _authRepository.getMe();
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  Future<void> updateUserProfile({required String name, required String phone}) async {
+    _setLoading(true);
+    try {
+      currentUser = await _authRepository.updateProfile(name: name, phone: phone);
+      _isLoading = false;
+      notifyListeners();
+    } catch (e) {
+      _setError(e.toString());
+      rethrow;
+    }
+  }
+
+  Future<void> deleteUserAccount() async {
+    _setLoading(true);
+    try {
+      await _authRepository.deleteAccount();
+      currentUser = null;
+      clearCart();
+      _isLoading = false;
+      notifyListeners();
+    } catch (e) {
+      _setError(e.toString());
+      rethrow;
+    }
+  }
+
+  // Fetch Addresses
+  Future<void> fetchAddresses() async {
+    try {
+      addresses = await _addressRepository.getAddresses();
+      if (addresses.isNotEmpty) {
+        final def = addresses.where((a) => a.isDefault);
+        selectedAddress = def.isNotEmpty ? def.first : addresses.first;
+      }
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  Future<void> createAddress({
+    required String label,
+    required String line1,
+    String? line2,
+    required String city,
+    required String state,
+    required String pincode,
+    bool isDefault = false,
+  }) async {
+    try {
+      final newAddr = await _addressRepository.createAddress(
+        label: label,
+        line1: line1,
+        line2: line2,
+        city: city,
+        state: state,
+        pincode: pincode,
+        isDefault: isDefault,
+      );
+      await fetchAddresses();
+      selectedAddress = newAddr;
+      notifyListeners();
+    } catch (_) {
+      rethrow;
+    }
+  }
+
+  // Fetch Menu Items separately when category changes
+  Future<void> fetchRestaurantMenu() async {
+    if (_selectedRestaurantId == null) return;
+    try {
+      menuItems = await _customerRepository.getRestaurantMenu(
+        _selectedRestaurantId!,
+        category: _selectedCategory,
+      );
+      notifyListeners();
+    } catch (_) {}
   }
 
   // Fetch User Access & Free Trial Status
@@ -124,6 +369,57 @@ class TiffinStateProvider extends ChangeNotifier {
     try {
       _accessStatus = await _subscriptionRepository.getAccessStatus();
     } catch (_) {}
+  }
+
+  // Subscription Actions
+  Future<void> subscribeToPlan(SubscriptionPlan plan) async {
+    _activeSubscription = plan.title;
+    try {
+      if (_selectedRestaurantId != null) {
+        final sub = await _subscriptionRepository.subscribe(
+          restaurantId: _selectedRestaurantId!,
+          subscriptionPlanId: plan.id,
+          startDate: DateTime.now().toIso8601String().split('T').first,
+          addressId: 1,
+        );
+        _activeSubscriptionDetails = sub;
+      }
+    } catch (_) {}
+    notifyListeners();
+  }
+
+  Future<void> pauseSubscription([int? subscriptionId]) async {
+    final subId = subscriptionId ?? _activeSubscriptionDetails?.id;
+    if (subId != null) {
+      try {
+        final updated = await _subscriptionRepository.pauseSubscription(subId);
+        _activeSubscriptionDetails = updated;
+      } catch (_) {}
+    }
+    notifyListeners();
+  }
+
+  Future<void> resumeSubscription([int? subscriptionId]) async {
+    final subId = subscriptionId ?? _activeSubscriptionDetails?.id;
+    if (subId != null) {
+      try {
+        final updated = await _subscriptionRepository.resumeSubscription(subId);
+        _activeSubscriptionDetails = updated;
+      } catch (_) {}
+    }
+    notifyListeners();
+  }
+
+  Future<void> cancelSubscription([int? subscriptionId]) async {
+    final subId = subscriptionId ?? _activeSubscriptionDetails?.id;
+    if (subId != null) {
+      try {
+        final updated = await _subscriptionRepository.cancelSubscription(subId);
+        _activeSubscriptionDetails = updated;
+      } catch (_) {}
+    }
+    _activeSubscription = 'None';
+    notifyListeners();
   }
 
   // Fetch Orders History
@@ -138,35 +434,25 @@ class TiffinStateProvider extends ChangeNotifier {
     }
   }
 
-  // --- IN-MEMORY CART & ADD-ON SEPARATION ---
+  // --- CART MANAGEMENT ---
 
-  bool isAddonItem(MenuItem item) {
-    final cat = categories.where((c) => c.id == item.categoryId).isNotEmpty
-        ? categories.firstWhere((c) => c.id == item.categoryId)
-        : null;
-    if (cat != null) {
-      final name = cat.name.toLowerCase();
-      if (name.contains('add-on') || name.contains('addon')) return true;
+  void addToCart(MenuItem item, {String itemType = 'Menu Item', int quantity = 1}) {
+    if (_selectedRestaurantId != null && item.restaurantId != _selectedRestaurantId) {
+      // Prevent mixing items from different restaurants
+      _cartItems.clear();
     }
-    return false;
-  }
 
-  void addToCart(MenuItem item) {
-    if (_cartItems.isNotEmpty && _cartItems.first.item.restaurantId != item.restaurantId) {
-      return;
-    }
-    
-    final existingIndex = _cartItems.indexWhere((c) => c.item.id == item.id);
+    final existingIndex = _cartItems.indexWhere((c) => c.item.id == item.id && c.itemType == itemType);
     if (existingIndex >= 0) {
-      _cartItems[existingIndex].quantity++;
+      _cartItems[existingIndex].quantity += quantity;
     } else {
-      _cartItems.add(ClientCartItem(item: item));
+      _cartItems.add(ClientCartItem(item: item, quantity: quantity, itemType: itemType));
     }
     notifyListeners();
   }
 
-  void removeFromCart(MenuItem item) {
-    final existingIndex = _cartItems.indexWhere((c) => c.item.id == item.id);
+  void removeFromCart(MenuItem item, {String itemType = 'Menu Item'}) {
+    final existingIndex = _cartItems.indexWhere((c) => c.item.id == item.id && c.itemType == itemType);
     if (existingIndex >= 0) {
       if (_cartItems[existingIndex].quantity > 1) {
         _cartItems[existingIndex].quantity--;
@@ -177,101 +463,104 @@ class TiffinStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void updateCartQuantity(int menuItemId, String itemType, int newQuantity) {
+    final existingIndex = _cartItems.indexWhere((c) => c.item.id == menuItemId && c.itemType == itemType);
+    if (existingIndex >= 0) {
+      if (newQuantity <= 0) {
+        _cartItems.removeAt(existingIndex);
+      } else {
+        _cartItems[existingIndex].quantity = newQuantity;
+      }
+    }
+    notifyListeners();
+  }
+
   void clearCart() {
     _cartItems.clear();
     notifyListeners();
   }
 
-  int getItemQuantity(int menuItemId) {
-    final item = _cartItems.firstWhere((c) => c.item.id == menuItemId, orElse: () => ClientCartItem(item: MenuItem(id: 0, categoryId: 0, restaurantId: 0, name: '', description: '', price: 0, discountPrice: 0, vegType: 'VEG', availability: false, status: 'inactive'), quantity: 0));
-    return item.quantity;
+  int getItemQuantity(int menuItemId, {String? itemType}) {
+    if (itemType != null) {
+      final found = _cartItems.where((c) => c.item.id == menuItemId && c.itemType == itemType);
+      return found.isNotEmpty ? found.first.quantity : 0;
+    }
+    final found = _cartItems.where((c) => c.item.id == menuItemId);
+    return found.fold(0, (sum, c) => sum + c.quantity);
   }
 
   int get totalCartCount {
     return _cartItems.fold(0, (sum, c) => sum + c.quantity);
   }
 
-  // Standard calculation
+  // Subtotal = Sum of (Unit Price x Quantity)
   double get subtotal {
-    return _cartItems.fold(0.0, (sum, c) => sum + (c.item.price * c.quantity));
+    return _cartItems.fold(0.0, (sum, c) => sum + c.subtotal);
+  }
+
+  // Tax / GST calculated dynamically based on backend tax configuration
+  double get taxAmount {
+    if (_cartItems.isEmpty) return 0.0;
+    return subtotal * (taxRatePercentage / 100.0);
   }
 
   double get deliveryFee => _cartItems.isEmpty ? 0.0 : 2.00;
-  double get tax => _cartItems.isEmpty ? 0.0 : 1.50;
-  double get total => subtotal + deliveryFee + tax;
+  double get total => subtotal + taxAmount + deliveryFee;
 
-  // Add-on Payment Separation Breakdown
-  List<ClientCartItem> get subscriptionIncludedCartItems {
-    return _cartItems.where((c) => !isAddonItem(c.item)).toList();
-  }
-
+  // Add-on Payment Breakdown
   List<ClientCartItem> get addonCartItems {
-    return _cartItems.where((c) => isAddonItem(c.item)).toList();
+    return _cartItems.where((c) => c.itemType == 'Add-on').toList();
   }
-
-  double get subscriptionCoveredSubtotal => 0.00; // Subscription meals are prepaid
 
   double get addonSubtotal {
-    return addonCartItems.fold(0.0, (sum, c) => sum + (c.item.price * c.quantity));
+    return addonCartItems.fold(0.0, (sum, c) => sum + c.subtotal);
+  }
+
+  double get addonTaxAmount {
+    if (addonCartItems.isEmpty) return 0.0;
+    return addonSubtotal * (taxRatePercentage / 100.0);
   }
 
   double get addonDeliveryFee => addonCartItems.isEmpty ? 0.0 : 2.00;
-  double get addonTax => addonCartItems.isEmpty ? 0.0 : 1.50;
-  double get addonTotalPayable => addonSubtotal + addonDeliveryFee + addonTax;
+  double get addonTotalPayable => addonSubtotal + addonTaxAmount + addonDeliveryFee;
 
-  // --- API MUTATION ACTIONS ---
+  // --- API ORDER MUTATION ---
 
-  // Place Order on Backend
-  Future<Order> placeOrder(String address) async {
+  Future<Order> placeOrder(String address, {int? addressId, String? deliveryNotes, bool simulateWorldpay = true}) async {
     _setLoading(true);
     try {
       final itemsData = _cartItems.map((c) => {
         'menu_item_id': c.item.id,
         'quantity': c.quantity,
-        'is_addon': isAddonItem(c.item),
+        'item_type': c.itemType,
+        'is_addon': c.itemType == 'Add-on',
       }).toList();
 
+      final int targetAddressId = addressId ?? selectedAddress?.id ?? 1;
+
       final orderData = {
-        'restaurant_id': _selectedRestaurantId,
+        'restaurant_id': _selectedRestaurantId ?? 1,
+        'address_id': targetAddressId,
         'delivery_address': address,
+        if (deliveryNotes != null && deliveryNotes.isNotEmpty) 'delivery_notes': deliveryNotes,
         'items': itemsData,
         'subtotal': subtotal,
-        'addon_subtotal': addonSubtotal,
+        'tax': taxAmount,
+        'tax_rate_percentage': taxRatePercentage,
         'delivery_fee': deliveryFee,
-        'tax': tax,
         'total': total,
-        'addon_total_payable': addonTotalPayable,
       };
 
       final order = await _customerRepository.createOrder(orderData);
-      
-      // If user consumed subscription meals, decrement remaining count
-      if (_activeSubscriptionDetails != null && subscriptionIncludedCartItems.isNotEmpty) {
-        final int used = _activeSubscriptionDetails!.usedMeals + subscriptionIncludedCartItems.length;
-        final int rem = max(0, _activeSubscriptionDetails!.totalMeals - used);
-        _activeSubscriptionDetails = Subscription(
-          id: _activeSubscriptionDetails!.id,
-          userId: _activeSubscriptionDetails!.userId,
-          restaurantId: _activeSubscriptionDetails!.restaurantId,
-          subscriptionPlanId: _activeSubscriptionDetails!.subscriptionPlanId,
-          status: rem <= 0 ? 'EXPIRED' : 'ACTIVE',
-          startDate: _activeSubscriptionDetails!.startDate,
-          endDate: _activeSubscriptionDetails!.endDate,
-          autoRenew: _activeSubscriptionDetails!.autoRenew,
-          plan: _activeSubscriptionDetails!.plan,
-          restaurant: _activeSubscriptionDetails!.restaurant,
-          totalMeals: _activeSubscriptionDetails!.totalMeals,
-          usedMeals: used,
-          remainingMeals: rem,
-          maxValidityDays: _activeSubscriptionDetails!.maxValidityDays,
-          maxValidityDate: _activeSubscriptionDetails!.maxValidityDate,
-          daysUntilExpiry: _activeSubscriptionDetails!.daysUntilExpiry,
-          expiryReminderMessage: rem <= 0 ? 'Your plan has expired.' : _activeSubscriptionDetails!.expiryReminderMessage,
-          paymentStatus: 'PAID',
-        );
+
+      // Dev/Sandbox Worldpay Simulation if enabled
+      if (simulateWorldpay && order.orderNumber.isNotEmpty) {
+        try {
+          await _orderRepository.simulateWorldpayPayment(orderNumber: order.orderNumber, status: 'PAID');
+        } catch (_) {}
       }
 
-      _cartItems.clear();
+      clearCart();
       _isLoading = false;
       notifyListeners();
       return order;
@@ -280,59 +569,4 @@ class TiffinStateProvider extends ChangeNotifier {
       rethrow;
     }
   }
-
-  // Subscribe to plan on backend
-  Future<void> subscribeToPlan(SubscriptionPlan plan) async {
-    _setLoading(true);
-    try {
-      final now = DateTime.now();
-      final String startDateStr = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
-      final int maxDays = plan.maxValidityDays; // Weekly: 14 days, Monthly: 60 days
-      final maxDate = now.add(Duration(days: maxDays));
-      final String maxDateStr = "${maxDate.year}-${maxDate.month.toString().padLeft(2, '0')}-${maxDate.day.toString().padLeft(2, '0')}";
-
-      _activeSubscription = plan.title;
-      _activeSubscriptionDetails = Subscription(
-        id: 1,
-        userId: 1,
-        restaurantId: plan.restaurantId,
-        subscriptionPlanId: plan.id,
-        status: 'ACTIVE',
-        startDate: startDateStr,
-        endDate: maxDateStr,
-        autoRenew: true,
-        plan: plan,
-        totalMeals: plan.mealsCount,
-        usedMeals: 0,
-        remainingMeals: plan.mealsCount,
-        maxValidityDays: maxDays,
-        maxValidityDate: maxDateStr,
-        daysUntilExpiry: maxDays,
-        expiryReminderMessage: null,
-        paymentStatus: 'PAID',
-      );
-
-      // Grant access status upon subscribing
-      _accessStatus = {
-        'can_access': true,
-        'is_trial': false,
-        'trial_days_remaining': 0,
-        'message': 'Active subscription plan.',
-        'subscription': _activeSubscriptionDetails,
-      };
-
-      _isLoading = false;
-      notifyListeners();
-    } catch (e) {
-      _setError(e.toString());
-    }
-  }
-
-  void cancelSubscription() {
-    _activeSubscription = 'None';
-    _activeSubscriptionDetails = null;
-    notifyListeners();
-  }
-
-  int max(int a, int b) => a > b ? a : b;
 }

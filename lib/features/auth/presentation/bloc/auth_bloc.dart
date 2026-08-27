@@ -1,6 +1,5 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../repositories/auth_repository.dart';
-import '../../../../models/user.dart';
 import 'auth_event.dart';
 import 'auth_state.dart';
 
@@ -47,7 +46,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         phone: event.phone,
         password: event.password,
         passwordConfirmation: event.password,
-        role: 'CUSTOMER',
+        role: 'customer',
+        address: event.address,
+        city: event.city,
+        postcode: event.postcode,
       );
       emit(AuthAuthenticated(role: user.role, email: user.email, user: user));
     } catch (e) {
@@ -64,7 +66,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         phone: event.phone,
         password: event.password,
         passwordConfirmation: event.password,
-        role: 'RESTAURANT',
+        role: 'restaurant',
+        address: event.address,
+        postcode: event.postcode,
+        bankHolderName: event.bankHolderName,
+        bankAccountNumber: event.bankAccountNumber,
+        bankIfscCode: event.bankIfscCode,
+        bankBranchName: event.bankBranchName,
       );
       emit(AuthAuthenticated(role: user.role, email: user.email, user: user));
     } catch (e) {
@@ -87,10 +95,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     emit(AuthUnauthenticated());
   }
 
-  // Backward compatibility helper methods
+  // Helper methods for direct async calls awaiting final state
   Future<AuthState> login({required String email, required String password}) async {
     add(CustomerLoginEvent(email: email, password: password));
-    return state;
+    return stream.firstWhere((s) => s is AuthAuthenticated || s is AuthError);
   }
 
   Future<AuthState> registerCustomer({
@@ -111,7 +119,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       postcode: postcode,
       password: password,
     ));
-    return state;
+    return stream.firstWhere((s) => s is AuthAuthenticated || s is AuthError);
   }
 
   Future<AuthState> registerRestaurant({
@@ -138,6 +146,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       bankIfscCode: bankIfscCode,
       bankBranchName: bankBranchName,
     ));
-    return state;
+    return stream.firstWhere((s) => s is AuthAuthenticated || s is AuthError);
   }
 }
