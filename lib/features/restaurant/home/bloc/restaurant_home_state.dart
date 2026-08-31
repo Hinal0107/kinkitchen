@@ -1,5 +1,5 @@
-import '../../../../models/restaurant.dart';
-import '../../../../models/menu_item.dart';
+import 'package:kinkitchen/shared/models/restaurant.dart';
+import 'package:kinkitchen/shared/models/menu_item.dart';
 
 abstract class RestaurantHomeState {}
 

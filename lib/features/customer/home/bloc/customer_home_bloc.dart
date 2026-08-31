@@ -1,5 +1,5 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
-import '../../../../repositories/customer_repository.dart';
+import 'package:kinkitchen/shared/repositories/customer_repository.dart';
 import 'customer_home_event.dart';
 import 'customer_home_state.dart';
 

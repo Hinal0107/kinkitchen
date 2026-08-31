@@ -1,5 +1,5 @@
-import '../../../../models/subscription_plan.dart';
-import '../../../../models/subscription.dart';
+import 'package:kinkitchen/shared/models/subscription_plan.dart';
+import 'package:kinkitchen/shared/models/subscription.dart';
 
 abstract class SubscriptionState {}
 

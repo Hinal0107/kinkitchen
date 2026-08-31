@@ -1,4 +1,4 @@
-import '../../../../models/subscription_plan.dart';
+import 'package:kinkitchen/shared/models/subscription_plan.dart';
 
 abstract class RestaurantPlansState {}
 

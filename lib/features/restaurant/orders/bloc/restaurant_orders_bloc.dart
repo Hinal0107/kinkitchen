@@ -1,5 +1,5 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
-import '../../../../repositories/order_repository.dart';
+import 'package:kinkitchen/shared/repositories/order_repository.dart';
 import 'restaurant_orders_event.dart';
 import 'restaurant_orders_state.dart';
 

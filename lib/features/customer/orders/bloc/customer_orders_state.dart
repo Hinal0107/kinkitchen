@@ -1,4 +1,4 @@
-import '../../../../models/order.dart';
+import 'package:kinkitchen/shared/models/order.dart';
 
 abstract class CustomerOrdersState {}
 

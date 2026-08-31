@@ -1,4 +1,4 @@
-import '../../../../models/cart_item.dart';
+import 'package:kinkitchen/shared/models/cart_item.dart';
 
 abstract class CartState {}
 

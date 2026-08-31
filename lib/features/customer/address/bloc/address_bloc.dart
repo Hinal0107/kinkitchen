@@ -1,5 +1,5 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
-import '../../../../repositories/address_repository.dart';
+import 'package:kinkitchen/shared/repositories/address_repository.dart';
 import 'address_event.dart';
 import 'address_state.dart';
 

@@ -1,4 +1,4 @@
-import '../../../../models/address.dart';
+import 'package:kinkitchen/shared/models/address.dart';
 
 abstract class AddressState {}
 

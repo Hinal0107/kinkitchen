@@ -1,4 +1,4 @@
-import '../../../../models/restaurant.dart';
+import 'package:kinkitchen/shared/models/restaurant.dart';
 
 abstract class RestaurantProfileState {}
 

@@ -1,6 +1,6 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
-import '../../../../repositories/cart_repository.dart';
-import '../../../../models/cart_item.dart';
+import 'package:kinkitchen/shared/repositories/cart_repository.dart';
+import 'package:kinkitchen/shared/models/cart_item.dart';
 import 'cart_event.dart';
 import 'cart_state.dart';
 

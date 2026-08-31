@@ -1,5 +1,5 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
-import '../../../../repositories/subscription_repository.dart';
+import 'package:kinkitchen/shared/repositories/subscription_repository.dart';
 import 'subscription_event.dart';
 import 'subscription_state.dart';
 

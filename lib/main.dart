@@ -1,24 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'core/theme/app_theme.dart';
+import 'app/theme/app_theme.dart';
 import 'core/widgets/responsive_wrapper.dart';
 import 'core/network/api_client.dart';
-import 'services/fcm_service.dart';
-import 'features/auth/presentation/screens/splash_screen.dart';
-import 'features/auth/presentation/screens/role_selection_screen.dart';
-import 'features/auth/presentation/screens/customer_login_screen.dart';
-import 'features/auth/presentation/screens/customer_register_screen.dart';
-import 'features/auth/presentation/screens/restaurant_login_screen.dart';
-import 'features/auth/presentation/screens/restaurant_register_screen.dart';
-import 'features/customer/home/presentation/screens/restaurant_selection_screen.dart';
-import 'features/tiffin/presentation/screens/dashboard_screen.dart';
-import 'features/tiffin/presentation/screens/restaurant_dashboard_screen.dart';
-import 'features/tiffin/presentation/screens/terms_and_conditions_screen.dart';
-import 'features/tiffin/presentation/bloc/tiffin_state_provider.dart';
+import 'shared/services/fcm_service.dart';
+
+import 'modules/auth/presentation/pages/splash_screen.dart';
+import 'modules/auth/presentation/pages/role_selection_screen.dart';
+import 'modules/auth/presentation/pages/customer_login_screen.dart';
+import 'modules/auth/presentation/pages/customer_register_screen.dart';
+import 'modules/auth/presentation/pages/restaurant_login_screen.dart';
+import 'modules/auth/presentation/pages/restaurant_register_screen.dart';
+import 'modules/customer/home/presentation/pages/restaurant_selection_screen.dart';
+import 'modules/customer/home/presentation/pages/dashboard_screen.dart';
+import 'modules/restaurant/dashboard/presentation/pages/restaurant_dashboard_screen.dart';
+import 'modules/customer/subscriptions/presentation/pages/terms_and_conditions_screen.dart';
+import 'modules/customer/profile/presentation/pages/notifications_screen.dart';
+import 'modules/customer/tiffin_state_provider.dart';
 
 // BLoC Imports
-import 'features/auth/presentation/bloc/auth_bloc.dart';
+import 'modules/auth/presentation/bloc/auth_bloc.dart';
 import 'features/customer/home/bloc/customer_home_bloc.dart';
 import 'features/customer/menu/bloc/customer_menu_bloc.dart';
 import 'features/customer/cart/bloc/cart_bloc.dart';
@@ -94,6 +96,8 @@ class MyApp extends StatelessWidget {
             '/dashboard': (context) => const DashboardScreen(),
             '/restaurant-dashboard': (context) => const RestaurantDashboardScreen(),
             '/terms-and-conditions': (context) => const TermsAndConditionsScreen(),
+            '/notifications': (context) => const NotificationsScreen(isRestaurant: false),
+            '/restaurant-notifications': (context) => const NotificationsScreen(isRestaurant: true),
           },
         ),
       ),

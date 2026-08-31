@@ -1,6 +1,6 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
-import '../../../../repositories/restaurant_repository.dart';
-import '../../../../models/menu_item.dart';
+import 'package:kinkitchen/shared/repositories/restaurant_repository.dart';
+import 'package:kinkitchen/shared/models/menu_item.dart';
 import 'restaurant_home_event.dart';
 import 'restaurant_home_state.dart';
 
