@@ -80,16 +80,29 @@ class AuthRepository {
       await prefs.setString('device_id', deviceId);
     }
 
-    final response = await _apiClient.post(
-      ApiConfig.login,
-      body: {
-        'email': email,
-        'password': password,
-        'device_type': Platform.isAndroid ? 'android' : 'ios',
-        'device_id': deviceId,
-        if (fcmToken != null && fcmToken.isNotEmpty) 'fcm_token': fcmToken,
-      },
-    );
+    final Map<String, dynamic> loginBody = {
+      'email': email,
+      'password': password,
+      'device_type': Platform.isAndroid ? 'android' : 'ios',
+      'device_id': deviceId,
+      if (fcmToken != null && fcmToken.isNotEmpty) 'fcm_token': fcmToken,
+    };
+
+    dynamic response;
+    try {
+      response = await _apiClient.post(ApiConfig.login, body: loginBody);
+    } catch (e) {
+      // If backend throws MySQL duplicate entry error on fcm_token / user_devices, retry login cleanly without fcm_token
+      if (e.toString().contains('Duplicate entry') ||
+          e.toString().contains('fcm_tokens_token_unique') ||
+          e.toString().contains('user_devices') ||
+          e.toString().contains('1062')) {
+        final fallbackBody = Map<String, dynamic>.from(loginBody)..remove('fcm_token');
+        response = await _apiClient.post(ApiConfig.login, body: fallbackBody);
+      } else {
+        rethrow;
+      }
+    }
 
     final data = response['data'] ?? response;
     final String token = data['token'] as String? ?? data['access_token'] as String? ?? '';
@@ -99,7 +112,9 @@ class AuthRepository {
     if (token.isNotEmpty) {
       await _saveTokenAndRole(token, user.role, email);
       if (fcmToken != null && fcmToken.isNotEmpty) {
-        FcmService().syncTokenWithBackend(fcmToken);
+        try {
+          FcmService().syncTokenWithBackend(fcmToken);
+        } catch (_) {}
       }
     }
 

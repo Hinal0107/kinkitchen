@@ -33,12 +33,16 @@ import 'features/restaurant/plans/bloc/restaurant_plans_bloc.dart';
 import 'features/restaurant/orders/bloc/restaurant_orders_bloc.dart';
 import 'features/restaurant/profile/bloc/restaurant_profile_bloc.dart';
 
+import 'firebase_options.dart';
+
 final globalTiffinStateProvider = TiffinStateProvider();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
-    await Firebase.initializeApp();
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
   } catch (e) {
     debugPrint('Firebase initialization failed: $e');
   }
