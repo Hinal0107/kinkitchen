@@ -28,10 +28,12 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
     final dStat = deliveryStatus?.toUpperCase() ?? '';
     final oStat = status.toUpperCase();
 
-    if (dStat == 'DELIVERED' || oStat == 'COMPLETED') return const Color(0xFF00A859);
-    if (dStat == 'OUT_FOR_DELIVERY') return const Color(0xFFFF5E00);
-    if (oStat == 'PREPARING' || oStat == 'READY') return Colors.blue;
-    if (oStat == 'CANCELLED') return Colors.red;
+    if (dStat == 'DELIVERED' || oStat == 'COMPLETED' || oStat == 'DELIVERED') return const Color(0xFF00A859);
+    if (dStat == 'OUT_FOR_DELIVERY' || oStat == 'OUT_FOR_DELIVERY') return const Color(0xFF7C3AED);
+    if (oStat == 'READY') return const Color(0xFF059669);
+    if (oStat == 'PREPARING') return const Color(0xFF0284C7);
+    if (oStat == 'CONFIRMED') return const Color(0xFF2563EB);
+    if (oStat == 'REJECTED' || oStat == 'CANCELLED') return Colors.red;
     return const Color(0xFFD97706);
   }
 
@@ -39,13 +41,14 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
     final dStat = order.deliveryStatus?.toUpperCase() ?? '';
     final oStat = order.status.toUpperCase();
 
-    if (dStat == 'DELIVERED' || oStat == 'COMPLETED') return 'DELIVERED';
-    if (dStat == 'OUT_FOR_DELIVERY') return 'OUT FOR DELIVERY';
+    if (dStat == 'DELIVERED' || oStat == 'COMPLETED' || oStat == 'DELIVERED') return 'DELIVERED';
+    if (dStat == 'OUT_FOR_DELIVERY' || oStat == 'OUT_FOR_DELIVERY') return 'OUT FOR DELIVERY';
     if (oStat == 'READY') return 'READY FOR DELIVERY';
     if (oStat == 'PREPARING') return 'PREPARING';
     if (oStat == 'CONFIRMED') return 'CONFIRMED';
+    if (oStat == 'REJECTED') return 'REJECTED';
     if (oStat == 'CANCELLED') return 'CANCELLED';
-    return 'ORDER PLACED';
+    return 'PENDING';
   }
 
   @override
@@ -233,34 +236,98 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
 
                 const Divider(height: 20),
 
-                // Delivery Address & Total
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                // Itemized Payment Structure (matching Image 15 & 16)
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF9FAFB),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFFE5E7EB)),
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text('Delivery Address:', style: TextStyle(fontSize: 11, color: Color(0xFF9CA3AF))),
+                          const Text('Subtotal', style: TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
+                          Text('£${order.subtotal.toStringAsFixed(2)}', style: const TextStyle(fontSize: 12, color: Color(0xFF374151))),
+                        ],
+                      ),
+                      if (order.subscriptionAmount > 0) ...[
+                        const SizedBox(height: 4),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('Subscription Covered', style: TextStyle(fontSize: 12, color: Color(0xFF00A859), fontWeight: FontWeight.bold)),
+                            Text('-£${order.subscriptionAmount.toStringAsFixed(2)}', style: const TextStyle(fontSize: 12, color: Color(0xFF00A859), fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ],
+                      if (order.addonAmount > 0) ...[
+                        const SizedBox(height: 4),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('Add-ons (Paid separately)', style: TextStyle(fontSize: 12, color: Color(0xFF4B5563))),
+                            Text('£${order.addonAmount.toStringAsFixed(2)}', style: const TextStyle(fontSize: 12, color: Color(0xFF374151))),
+                          ],
+                        ),
+                      ],
+                      const SizedBox(height: 4),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Tax & GST', style: TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
+                          Text('£${order.tax.toStringAsFixed(2)}', style: const TextStyle(fontSize: 12, color: Color(0xFF374151))),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Delivery Fee', style: TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
                           Text(
-                            order.deliveryAddress,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Color(0xFF4B5563)),
+                            order.deliveryFee > 0 ? '£${order.deliveryFee.toStringAsFixed(2)}' : 'FREE',
+                            style: TextStyle(fontSize: 12, color: order.deliveryFee > 0 ? const Color(0xFF374151) : const Color(0xFF00A859), fontWeight: order.deliveryFee > 0 ? FontWeight.normal : FontWeight.bold),
                           ),
                         ],
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        const Text('Total Amount', style: TextStyle(fontSize: 11, color: Color(0xFF9CA3AF))),
-                        Text(
-                          '£${order.total.toStringAsFixed(2)}',
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: brandOrange),
-                        ),
-                      ],
+                      const Divider(height: 14),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Total Order Value', style: TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
+                          Text('£${order.total.toStringAsFixed(2)}', style: const TextStyle(fontSize: 12, color: Color(0xFF374151))),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Customer Paid', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF1F2937))),
+                          Text(
+                            '£${order.paidAmount.toStringAsFixed(2)}',
+                            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: brandOrange),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // Delivery Address
+                Row(
+                  children: [
+                    const Icon(Icons.location_on_outlined, size: 14, color: Color(0xFF6B7280)),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        order.deliveryAddress,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 12, color: Color(0xFF4B5563)),
+                      ),
                     ),
                   ],
                 ),

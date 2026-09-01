@@ -15,6 +15,12 @@ class Order {
   final double deliveryFee;
   final double tax;
   final double total;
+  final double subscriptionAmount;
+  final double additionalMealAmount;
+  final double addonAmount;
+  final double discountAmount;
+  final double paidAmount;
+  final double remainingAmount;
   final String? deliveryNotes;
   final String customerName;
   final String customerPhone;
@@ -37,6 +43,12 @@ class Order {
     required this.deliveryFee,
     required this.tax,
     required this.total,
+    this.subscriptionAmount = 0.0,
+    this.additionalMealAmount = 0.0,
+    this.addonAmount = 0.0,
+    this.discountAmount = 0.0,
+    this.paidAmount = 0.0,
+    this.remainingAmount = 0.0,
     this.deliveryNotes,
     required this.customerName,
     required this.customerPhone,
@@ -73,6 +85,12 @@ class Order {
     final userObj = json['user'] as Map<String, dynamic>? ?? json['customer'] as Map<String, dynamic>?;
     final addressObj = json['address'] as Map<String, dynamic>?;
 
+    final double totalVal = toDouble(json['total'] ?? json['total_amount']);
+    final double subAmount = toDouble(json['subscription_amount'] ?? json['subscription_coverage']);
+    final double paidVal = json['paid_amount'] != null
+        ? toDouble(json['paid_amount'])
+        : (json['customer_paid'] != null ? toDouble(json['customer_paid']) : (totalVal - subAmount).clamp(0.0, 999999.0));
+
     return Order(
       id: toInt(json['id']),
       orderNumber: json['order_number']?.toString() ?? json['id']?.toString() ?? '',
@@ -87,7 +105,13 @@ class Order {
       subtotal: toDouble(json['subtotal']),
       deliveryFee: toDouble(json['delivery_fee']),
       tax: toDouble(json['tax']),
-      total: toDouble(json['total'] ?? json['total_amount']),
+      total: totalVal,
+      subscriptionAmount: subAmount,
+      additionalMealAmount: toDouble(json['additional_meal_amount']),
+      addonAmount: toDouble(json['addon_amount']),
+      discountAmount: toDouble(json['discount_amount']),
+      paidAmount: paidVal,
+      remainingAmount: toDouble(json['remaining_amount']),
       deliveryNotes: json['delivery_notes']?.toString() ?? json['notes']?.toString(),
       customerName: userObj?['name']?.toString() ?? json['customer_name']?.toString() ?? 'Customer',
       customerPhone: userObj?['phone']?.toString() ?? json['customer_phone']?.toString() ?? '',
@@ -112,6 +136,13 @@ class Order {
       'delivery_fee': deliveryFee,
       'tax': tax,
       'total': total,
+      'subscription_amount': subscriptionAmount,
+      'additional_meal_amount': additionalMealAmount,
+      'addon_amount': addonAmount,
+      'discount_amount': discountAmount,
+      'total_amount': total,
+      'paid_amount': paidAmount,
+      'remaining_amount': remainingAmount,
       'delivery_notes': deliveryNotes,
       'customer_name': customerName,
       'customer_phone': customerPhone,

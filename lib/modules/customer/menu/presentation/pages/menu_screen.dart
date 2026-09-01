@@ -40,8 +40,22 @@ class _MenuScreenState extends State<MenuScreen> {
     const Color brandOrange = Color(0xFFFF5E00);
     const Color brandGreen = Color(0xFF00A859);
 
-    // Filter menu items by search query
+    // Filter menu items by selected category and search query
     final filteredMenuItems = state.menuItems.where((item) {
+      // Category filter check
+      if (state.selectedCategory.isNotEmpty &&
+          state.selectedCategory != 'All' &&
+          state.selectedCategory != 'All Items') {
+        final selectedCat = state.categories.where((c) => c.name.toLowerCase() == state.selectedCategory.toLowerCase());
+        if (selectedCat.isNotEmpty) {
+          final catId = selectedCat.first.id;
+          if (item.categoryId != catId && item.categoryId != 0) {
+            return false;
+          }
+        }
+      }
+
+      // Search query check
       if (_searchQuery.isEmpty) return true;
       final query = _searchQuery.toLowerCase();
       return item.name.toLowerCase().contains(query) ||
@@ -296,19 +310,13 @@ class _MenuScreenState extends State<MenuScreen> {
 
               const SizedBox(height: 12),
 
-              // Category Filter Chips Carousel
+              // Category Filter Chips Carousel (Fetched from GET /api/v1/restaurants/{restaurant_id}/categories)
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
                   children: [
                     _buildCategoryChip(state, 'All Items'),
-                    if (state.categories.isNotEmpty)
-                      ...state.categories.map((cat) => _buildCategoryChip(state, cat.name))
-                    else ...[
-                      _buildCategoryChip(state, 'Main Meals'),
-                      _buildCategoryChip(state, 'Sides'),
-                      _buildCategoryChip(state, 'Desserts'),
-                    ],
+                    ...state.categories.map((cat) => _buildCategoryChip(state, cat.name)),
                   ],
                 ),
               ),

@@ -315,17 +315,28 @@ class PlansScreen extends StatelessWidget {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
                     onPressed: () {
-                      if (isActive) {
-                        state.cancelSubscription();
+                      if (isActive || (state.hasActiveSubscription && state.remainingSubscriptionMeals > 0)) {
+                        _showActiveSubscriptionNoticeDialog(context, state);
                       } else {
-                        state.subscribeToPlan(plan);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Subscribed to ${plan.title}!')),
-                        );
+                        try {
+                          state.subscribeToPlan(plan);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Successfully subscribed to ${plan.title}! Valid for daily use.'),
+                              backgroundColor: brandGreen,
+                            ),
+                          );
+                        } catch (e) {
+                          _showActiveSubscriptionNoticeDialog(context, state);
+                        }
                       }
                     },
                     child: Text(
-                      isActive ? 'Active Plan (Cancel)' : (isBestValue ? 'Subscribe Now' : 'Select Plan'),
+                      isActive
+                          ? 'Current Active Plan'
+                          : (state.hasActiveSubscription && state.remainingSubscriptionMeals > 0
+                              ? 'Plan Active (Use Daily)'
+                              : (isBestValue ? 'Subscribe Now' : 'Select Plan')),
                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                     ),
                   ),
@@ -350,6 +361,42 @@ class PlansScreen extends StatelessWidget {
                 ),
               ),
             ),
+        ],
+      ),
+    );
+  }
+
+  void _showActiveSubscriptionNoticeDialog(BuildContext context, TiffinStateProvider state) {
+    final activeSub = state.activeSubscriptionDetails;
+    final String planName = activeSub?.plan?.title ?? state.activeSubscription;
+    final int remaining = state.remainingSubscriptionMeals;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.stars_rounded, color: Color(0xFF00A859), size: 24),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Active Subscription Running',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          'You already have an active "$planName" subscription with $remaining meals remaining.\n\n'
+          'Per Terms & Conditions, you do NOT need to purchase a new plan every day. You can continue using your current subscription every day until all meals are completed or expired.',
+          style: const TextStyle(fontSize: 13.5, color: Color(0xFF374151), height: 1.45),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('OK, Got it', style: TextStyle(color: Color(0xFFFF5E00), fontWeight: FontWeight.bold)),
+          ),
         ],
       ),
     );
@@ -437,24 +484,39 @@ class PlansScreen extends StatelessWidget {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
                     onPressed: () {
-                      state.subscribeToPlan(SubscriptionPlan(
-                        id: 1,
-                        restaurantId: state.selectedRestaurantId ?? 1,
-                        title: title,
-                        price: 180.0,
-                        duration: period,
-                        mealsCount: 30,
-                        mealType: 'Veg',
-                        taxesAndDisc: '',
-                        isPopular: isBestValue,
-                        status: 'ACTIVE',
-                      ));
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Subscribed to $title!')),
-                      );
+                      if (isActive || (state.hasActiveSubscription && state.remainingSubscriptionMeals > 0)) {
+                        _showActiveSubscriptionNoticeDialog(context, state);
+                      } else {
+                        try {
+                          state.subscribeToPlan(SubscriptionPlan(
+                            id: 1,
+                            restaurantId: state.selectedRestaurantId ?? 1,
+                            title: title,
+                            price: 180.0,
+                            duration: period,
+                            mealsCount: 30,
+                            mealType: 'Veg',
+                            taxesAndDisc: '',
+                            isPopular: isBestValue,
+                            status: 'ACTIVE',
+                          ));
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Successfully subscribed to $title! Valid for daily use.'),
+                              backgroundColor: brandGreen,
+                            ),
+                          );
+                        } catch (e) {
+                          _showActiveSubscriptionNoticeDialog(context, state);
+                        }
+                      }
                     },
                     child: Text(
-                      isBestValue ? 'Subscribe Now' : 'Select Plan',
+                      isActive
+                          ? 'Current Active Plan'
+                          : (state.hasActiveSubscription && state.remainingSubscriptionMeals > 0
+                              ? 'Plan Active (Use Daily)'
+                              : (isBestValue ? 'Subscribe Now' : 'Select Plan')),
                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                     ),
                   ),

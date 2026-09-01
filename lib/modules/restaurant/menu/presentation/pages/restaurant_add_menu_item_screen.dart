@@ -30,12 +30,8 @@ class _RestaurantAddMenuItemScreenState extends State<RestaurantAddMenuItemScree
   final _descriptionController = TextEditingController();
   final _regularPriceController = TextEditingController();
   final _discountPriceController = TextEditingController();
-  DateTime _selectedDate = DateTime.now();
-  late final TextEditingController _dateController;
 
-  // Dropdown & Selection States
-  late String _selectedMealType;
-  final Set<int> _selectedAddonIds = {};
+  // Selection States
   String _selectedDietaryType = 'Vegetarian (VEG)';
   String _selectedAvailability = 'Available';
   String? _selectedImageName;
@@ -66,19 +62,9 @@ class _RestaurantAddMenuItemScreenState extends State<RestaurantAddMenuItemScree
     return 'Available';
   }
 
-  String _normalizeMealType(String? val) {
-    if (val == null || val.isEmpty) return "Today's Meal";
-    final s = val.toUpperCase();
-    if (s.contains('TOMORROW')) return "Tomorrow's Meal";
-    if (s.contains('WEEKLY')) return "Weekly Meal";
-    if (s.contains('GENERAL') || s.contains('MENU')) return "General Menu";
-    return "Today's Meal";
-  }
-
   @override
   void initState() {
     super.initState();
-    _selectedMealType = _normalizeMealType(widget.initialMealType);
 
     if (widget.isEdit && widget.existingMeal != null) {
       final meal = widget.existingMeal!;
@@ -113,29 +99,6 @@ class _RestaurantAddMenuItemScreenState extends State<RestaurantAddMenuItemScree
         _existingImageUrl = imgUrl;
         _selectedImageName = 'Existing image attached';
       }
-
-      final String? dateVal = meal['date']?.toString();
-      if (dateVal != null && dateVal.isNotEmpty) {
-        if (dateVal.contains('/')) {
-          _dateController = TextEditingController(text: dateVal);
-        } else {
-          try {
-            final dt = DateTime.parse(dateVal);
-            _selectedDate = dt;
-            _dateController = TextEditingController(
-              text: '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}',
-            );
-          } catch (_) {
-            _dateController = TextEditingController(text: dateVal);
-          }
-        }
-      } else {
-        final dateStr = '${_selectedDate.day.toString().padLeft(2, '0')}/${_selectedDate.month.toString().padLeft(2, '0')}/${_selectedDate.year}';
-        _dateController = TextEditingController(text: dateStr);
-      }
-    } else {
-      final dateStr = '${_selectedDate.day.toString().padLeft(2, '0')}/${_selectedDate.month.toString().padLeft(2, '0')}/${_selectedDate.year}';
-      _dateController = TextEditingController(text: dateStr);
     }
 
     if (widget.stateProvider.categories.isNotEmpty) {
@@ -157,35 +120,7 @@ class _RestaurantAddMenuItemScreenState extends State<RestaurantAddMenuItemScree
     _descriptionController.dispose();
     _regularPriceController.dispose();
     _discountPriceController.dispose();
-    _dateController.dispose();
     super.dispose();
-  }
-
-  Future<void> _selectDate(BuildContext context) async {
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: _selectedDate,
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2030),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: Color(0xFFF15A22),
-              onPrimary: Colors.white,
-              onSurface: Color(0xFF1F2937),
-            ),
-          ),
-          child: child!,
-        );
-      },
-    );
-    if (picked != null && picked != _selectedDate) {
-      setState(() {
-        _selectedDate = picked;
-        _dateController.text = '${picked.day.toString().padLeft(2, '0')}/${picked.month.toString().padLeft(2, '0')}/${picked.year}';
-      });
-    }
   }
 
   Future<void> _pickImage(ImageSource source) async {
@@ -284,34 +219,14 @@ class _RestaurantAddMenuItemScreenState extends State<RestaurantAddMenuItemScree
           'status': 'ACTIVE',
         };
 
-        final String mealTypeBackend = _selectedMealType.contains('Tomorrow')
-            ? 'TOMORROW'
-            : (_selectedMealType.contains('Weekly') ? 'WEEKLY' : 'TODAY');
-
-        fields['date'] = _dateController.text.trim();
-        fields['meal_type'] = mealTypeBackend;
-        if (_selectedAddonIds.isNotEmpty) {
-          fields['addon_ids'] = _selectedAddonIds.join(',');
-        }
-
-        if (_selectedMealType == "General Menu") {
-          if (widget.isEdit && widget.existingMeal != null && widget.existingMeal!['id'] != null) {
-            final int itemId = widget.existingMeal!['id'];
-            await widget.stateProvider.updateMenuItem(itemId, fields, image: _pickedImageFile);
-          } else {
-            await widget.stateProvider.addMenuItem(fields, image: _pickedImageFile);
-          }
+        if (widget.isEdit && widget.existingMeal != null && widget.existingMeal!['id'] != null) {
+          final int itemId = widget.existingMeal!['id'];
+          await widget.stateProvider.updateMenuItem(itemId, fields, image: _pickedImageFile);
         } else {
-          if (widget.isEdit && widget.existingMeal != null && widget.existingMeal!['id'] != null) {
-            final int mealId = widget.existingMeal!['id'];
-            await widget.stateProvider.updateDailyMeal(mealId, fields, image: _pickedImageFile);
-          } else {
-            await widget.stateProvider.addDailyMeal(fields, image: _pickedImageFile);
-          }
+          await widget.stateProvider.addMenuItem(fields, image: _pickedImageFile);
         }
 
         // Refresh state from API/database
-        await widget.stateProvider.fetchDailyMeals();
         await widget.stateProvider.fetchMenuItems();
 
         if (mounted) {
@@ -427,111 +342,8 @@ class _RestaurantAddMenuItemScreenState extends State<RestaurantAddMenuItemScree
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // 1. Date to Schedule & Meal Type Row
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildFieldLabel('Date to Schedule'),
-                          TextFormField(
-                            controller: _dateController,
-                            readOnly: true,
-                            onTap: () => _selectDate(context),
-                            style: const TextStyle(fontSize: 13.5, color: Color(0xFF1F2937)),
-                            decoration: _buildInputDecoration(
-                              'Select Date',
-                              suffixIcon: IconButton(
-                                icon: const Icon(Icons.calendar_today_outlined, size: 18, color: Color(0xFF6B7280)),
-                                onPressed: () => _selectDate(context),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildFieldLabel('Meal Type'),
-                          DropdownButtonFormField<String>(
-                            value: _normalizeMealType(_selectedMealType),
-                            isExpanded: true,
-                            style: const TextStyle(fontSize: 13.5, color: Color(0xFF1F2937)),
-                            decoration: _buildInputDecoration("Today's Meal"),
-                            items: const [
-                              DropdownMenuItem(value: "Today's Meal", child: Text("Today's Meal")),
-                              DropdownMenuItem(value: "Tomorrow's Meal", child: Text("Tomorrow's Meal")),
-                              DropdownMenuItem(value: "Weekly Meal", child: Text("Weekly Meal")),
-                              DropdownMenuItem(value: "General Menu", child: Text("General Menu")),
-                            ],
-                            onChanged: (val) {
-                              if (val != null) {
-                                setState(() {
-                                  _selectedMealType = val;
-                                });
-                              }
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-
-                // 2. Available Add-ons
-                _buildFieldLabel('Available Add-ons'),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFFD1D5DB), width: 1),
-                  ),
-                  child: widget.stateProvider.todayAddons.isEmpty
-                      ? const Text(
-                          'No active add-ons available. Create them in the Add-ons tab.',
-                          style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
-                        )
-                      : Wrap(
-                          spacing: 8,
-                          runSpacing: 6,
-                          children: widget.stateProvider.todayAddons.map((addon) {
-                            final int id = addon['id'] ?? 0;
-                            final bool isSelected = _selectedAddonIds.contains(id);
-                            return FilterChip(
-                              label: Text('${addon['name']} (£${addon['price']})'),
-                              selected: isSelected,
-                              selectedColor: brandOrange.withOpacity(0.15),
-                              checkmarkColor: brandOrange,
-                              labelStyle: TextStyle(
-                                fontSize: 12.5,
-                                color: isSelected ? brandOrange : const Color(0xFF374151),
-                                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                              ),
-                              onSelected: (selected) {
-                                setState(() {
-                                  if (selected) {
-                                    _selectedAddonIds.add(id);
-                                  } else {
-                                    _selectedAddonIds.remove(id);
-                                  }
-                                });
-                              },
-                            );
-                          }).toList(),
-                        ),
-                ),
-                const SizedBox(height: 16),
-
-                // 3. Meal Box Name
-                _buildFieldLabel('Meal Box Name'),
+                // 1. Meal Box Name
+                _buildFieldLabel('Item name'),
                 TextFormField(
                   controller: _nameController,
                   style: const TextStyle(fontSize: 14),
@@ -551,7 +363,7 @@ class _RestaurantAddMenuItemScreenState extends State<RestaurantAddMenuItemScree
                 const SizedBox(height: 16),
 
                 // 5. Meal Image
-                _buildFieldLabel('Meal Image'),
+                _buildFieldLabel('Item Image'),
                 InkWell(
                   onTap: () => _showImageSourceActionSheet(context),
                   borderRadius: BorderRadius.circular(8),
@@ -750,7 +562,7 @@ class _RestaurantAddMenuItemScreenState extends State<RestaurantAddMenuItemScree
                             ),
                           )
                         : Text(
-                            widget.isEdit ? 'Update Meal' : 'Schedule Meal',
+                            widget.isEdit ? 'Update Menu' : 'Create Menu',
                             style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,

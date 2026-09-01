@@ -84,9 +84,9 @@ class _RestaurantOrdersScreenState extends State<RestaurantOrdersScreen> with Si
 
   List<Order> _filterOrders(List<Order> orders, String type) {
     if (type == 'completed') {
-      return orders.where((o) => o.status == 'DELIVERED').toList();
+      return orders.where((o) => o.status == 'DELIVERED' || o.status == 'REJECTED' || o.status == 'CANCELLED').toList();
     } else if (type == 'active') {
-      return orders.where((o) => o.status != 'DELIVERED').toList();
+      return orders.where((o) => o.status != 'DELIVERED' && o.status != 'REJECTED' && o.status != 'CANCELLED').toList();
     }
     return orders;
   }
@@ -179,19 +179,19 @@ class _RestaurantOrdersScreenState extends State<RestaurantOrdersScreen> with Si
                           const Icon(Icons.person_outline, size: 16, color: Color(0xFF6B7280)),
                           const SizedBox(width: 8),
                           Text(
-                            order.customerName ?? 'Guest Customer',
+                            order.customerName.isEmpty ? 'Guest Customer' : order.customerName,
                             style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF374151)),
                           ),
                         ],
                       ),
-                      if (order.customerPhone != null) ...[
+                      if (order.customerPhone.isNotEmpty) ...[
                         const SizedBox(height: 6),
                         Row(
                           children: [
                             const Icon(Icons.phone_outlined, size: 16, color: Color(0xFF6B7280)),
                             const SizedBox(width: 8),
                             Text(
-                              order.customerPhone!,
+                              order.customerPhone,
                               style: const TextStyle(fontSize: 12, color: Color(0xFF4B5563)),
                             ),
                           ],
@@ -236,12 +236,14 @@ class _RestaurantOrdersScreenState extends State<RestaurantOrdersScreen> with Si
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text(
-                                '$itemQty x $itemName',
-                                style: const TextStyle(fontSize: 13, color: Color(0xFF374151)),
+                              Expanded(
+                                child: Text(
+                                  '$itemQty x $itemName',
+                                  style: const TextStyle(fontSize: 13, color: Color(0xFF374151)),
+                                ),
                               ),
                               Text(
-                                '₹${(itemPrice * itemQty).toStringAsFixed(2)}',
+                                '£${(itemPrice * itemQty).toStringAsFixed(2)}',
                                 style: const TextStyle(fontSize: 13, color: Color(0xFF374151)),
                               ),
                             ],
@@ -249,25 +251,94 @@ class _RestaurantOrdersScreenState extends State<RestaurantOrdersScreen> with Si
                         );
                       }).toList(),
                       const SizedBox(height: 12),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'TOTAL AMOUNT',
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1F2937)),
-                          ),
-                          Text(
-                            '₹${order.total.toStringAsFixed(2)}',
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: merchantGreen),
-                          ),
-                        ],
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF9FAFB),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFFE5E7EB)),
+                        ),
+                        child: Column(
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text('Total Order Value', style: TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
+                                Text('£${order.total.toStringAsFixed(2)}', style: const TextStyle(fontSize: 12, color: Color(0xFF374151))),
+                              ],
+                            ),
+                            if (order.subscriptionAmount > 0) ...[
+                              const SizedBox(height: 4),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text('Subscription Covered', style: TextStyle(fontSize: 12, color: Color(0xFF00A859), fontWeight: FontWeight.bold)),
+                                  Text('-£${order.subscriptionAmount.toStringAsFixed(2)}', style: const TextStyle(fontSize: 12, color: Color(0xFF00A859), fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                            ],
+                            const Divider(height: 12),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text('Customer Paid', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1F2937))),
+                                Text(
+                                  '£${order.paidAmount.toStringAsFixed(2)}',
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: merchantGreen),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
                 ),
 
-                // Action Button based on status
-                if (order.status != 'DELIVERED') ...[
+                // Action Buttons based on Order Status Tree:
+                // PENDING -> REJECTED or CONFIRMED -> PREPARING -> READY -> OUT_FOR_DELIVERY -> DELIVERED
+                if (order.status == 'PENDING') ...[
+                  const Divider(height: 1, color: Color(0xFFE5E7EB)),
+                  Padding(
+                    padding: const EdgeInsets.all(12.0),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: SizedBox(
+                            height: 40,
+                            child: OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.red,
+                                side: const BorderSide(color: Colors.red),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                              onPressed: () => _rejectOrderDialog(state, order),
+                              icon: const Icon(Icons.close, size: 16),
+                              label: const Text('Reject', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: SizedBox(
+                            height: 40,
+                            child: ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: merchantGreen,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                elevation: 0,
+                              ),
+                              onPressed: () => _confirmOrderDialog(state, order),
+                              icon: const Icon(Icons.check, size: 16),
+                              label: const Text('Confirm', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ] else if (order.status != 'DELIVERED' && order.status != 'REJECTED' && order.status != 'CANCELLED') ...[
                   const Divider(height: 1, color: Color(0xFFE5E7EB)),
                   Padding(
                     padding: const EdgeInsets.all(12.0),
@@ -300,10 +371,15 @@ class _RestaurantOrdersScreenState extends State<RestaurantOrdersScreen> with Si
   Widget _buildStatusBadge(String status) {
     Color bg;
     Color fg;
-    switch (status) {
+    switch (status.toUpperCase()) {
       case 'PENDING':
         bg = const Color(0xFFFEF3C7);
         fg = const Color(0xFFD97706);
+        break;
+      case 'REJECTED':
+      case 'CANCELLED':
+        bg = const Color(0xFFFEE2E2);
+        fg = const Color(0xFFDC2626);
         break;
       case 'CONFIRMED':
         bg = const Color(0xFFDBEAFE);
@@ -337,14 +413,14 @@ class _RestaurantOrdersScreenState extends State<RestaurantOrdersScreen> with Si
         borderRadius: BorderRadius.circular(12),
       ),
       child: Text(
-        status,
+        status.toUpperCase(),
         style: TextStyle(color: fg, fontSize: 10, fontWeight: FontWeight.bold),
       ),
     );
   }
 
   String _getActionButtonLabel(String status) {
-    switch (status) {
+    switch (status.toUpperCase()) {
       case 'PENDING':
         return 'Confirm Order';
       case 'CONFIRMED':
@@ -361,7 +437,7 @@ class _RestaurantOrdersScreenState extends State<RestaurantOrdersScreen> with Si
   }
 
   String _getNextStatus(String status) {
-    switch (status) {
+    switch (status.toUpperCase()) {
       case 'PENDING':
         return 'CONFIRMED';
       case 'CONFIRMED':
@@ -375,6 +451,90 @@ class _RestaurantOrdersScreenState extends State<RestaurantOrdersScreen> with Si
       default:
         return 'DELIVERED';
     }
+  }
+
+  void _confirmOrderDialog(RestaurantStateProvider state, Order order) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Confirm Order', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        content: Text('Are you sure you want to confirm Order #${order.orderNumber}?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel', style: TextStyle(color: Color(0xFF6B7280))),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF00A859),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () async {
+              try {
+                await state.updateOrderStatus(order.id, 'CONFIRMED');
+                if (mounted) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Order Confirmed!'), backgroundColor: Color(0xFF00A859)),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error: ${e.toString()}'), backgroundColor: Colors.red),
+                  );
+                }
+              }
+            },
+            child: const Text('Confirm Order'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _rejectOrderDialog(RestaurantStateProvider state, Order order) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Reject Order', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.red)),
+        content: Text('Are you sure you want to REJECT Order #${order.orderNumber}? This action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel', style: TextStyle(color: Color(0xFF6B7280))),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () async {
+              try {
+                await state.updateOrderStatus(order.id, 'REJECTED');
+                if (mounted) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Order Rejected'), backgroundColor: Colors.red),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error: ${e.toString()}'), backgroundColor: Colors.red),
+                  );
+                }
+              }
+            },
+            child: const Text('Reject Order'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _updateStatusDialog(RestaurantStateProvider state, Order order) {

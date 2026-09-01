@@ -199,7 +199,7 @@ class _CartScreenState extends State<CartScreen> {
                                             ),
                                             child: Text(
                                               (state.hasActiveSubscription && cartItem.itemType != 'Add-on')
-                                                  ? 'Covered by Plan (£0.00)'
+                                                  ? 'Covered by Plan (£${cartItem.unitPrice.toStringAsFixed(2)})'
                                                   : (cartItem.itemType == 'Add-on' ? 'Add-on (Separate Payment)' : 'Veg'),
                                               style: TextStyle(
                                                 fontSize: 10,
@@ -215,11 +215,11 @@ class _CartScreenState extends State<CartScreen> {
                                       const SizedBox(height: 4),
                                       Text(
                                         (state.hasActiveSubscription && cartItem.itemType != 'Add-on')
-                                            ? '£0.00 (Included in Plan)'
+                                            ? 'Included in Plan (Value: £${cartItem.unitPrice.toStringAsFixed(2)})'
                                             : '£${cartItem.unitPrice.toStringAsFixed(2)}',
                                         style: TextStyle(
                                           fontWeight: FontWeight.bold,
-                                          fontSize: 13,
+                                          fontSize: 12.5,
                                           color: (state.hasActiveSubscription && cartItem.itemType != 'Add-on')
                                               ? const Color(0xFF00A859)
                                               : brandOrange,
@@ -404,7 +404,7 @@ class _CartScreenState extends State<CartScreen> {
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
                                   const Text('Subscription Meal(s)', style: TextStyle(color: Color(0xFF6B7280), fontSize: 13)),
-                                  const Text('£0.00 (Covered)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF00A859))),
+                                  Text('-£${state.subscriptionCoveredAmount.toStringAsFixed(2)} (Covered)', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF00A859))),
                                 ],
                               ),
                               const SizedBox(height: 8),
@@ -421,7 +421,10 @@ class _CartScreenState extends State<CartScreen> {
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 const Text('Delivery Fee', style: TextStyle(color: Color(0xFF6B7280), fontSize: 13)),
-                                Text('£${state.effectiveDeliveryFee.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                                Text(
+                                  state.effectiveDeliveryFee > 0 ? '£${state.effectiveDeliveryFee.toStringAsFixed(2)}' : 'FREE',
+                                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: state.effectiveDeliveryFee > 0 ? const Color(0xFF374151) : const Color(0xFF00A859)),
+                                ),
                               ],
                             ),
                             const SizedBox(height: 8),
@@ -438,8 +441,8 @@ class _CartScreenState extends State<CartScreen> {
                               children: [
                                 const Text('Total Payable', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1F2937))),
                                 Text(
-                                  '£${state.effectiveTotal.toStringAsFixed(2)}',
-                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: state.hasActiveSubscription ? const Color(0xFF00A859) : brandOrange),
+                                  '£${state.customerPaidAmount.toStringAsFixed(2)}',
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: state.customerPaidAmount == 0.0 ? const Color(0xFF00A859) : brandOrange),
                                 ),
                               ],
                             ),

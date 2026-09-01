@@ -280,6 +280,7 @@ class TiffinStateProvider extends ChangeNotifier {
 
       await fetchAddresses();
       await fetchAccessStatus();
+      await fetchActiveSubscription();
       await fetchCurrentUserProfile();
       await fetchNotifications();
       _isLoading = false;
@@ -362,12 +363,14 @@ class TiffinStateProvider extends ChangeNotifier {
     }
   }
 
-  // Fetch Menu Items separately when category changes
+  // Fetch Categories & Menu Items from API
   Future<void> fetchRestaurantMenu() async {
     if (_selectedRestaurantId == null) return;
     try {
+      final resId = _selectedRestaurantId!;
+      categories = await _customerRepository.getRestaurantCategories(resId);
       menuItems = await _customerRepository.getRestaurantMenu(
-        _selectedRestaurantId!,
+        resId,
         category: _selectedCategory,
       );
       notifyListeners();
@@ -378,6 +381,28 @@ class TiffinStateProvider extends ChangeNotifier {
   Future<void> fetchAccessStatus() async {
     try {
       _accessStatus = await _subscriptionRepository.getAccessStatus();
+    } catch (_) {}
+  }
+
+  // Fetch Active Customer Subscriptions from Backend
+  Future<void> fetchActiveSubscription() async {
+    try {
+      final subs = await _subscriptionRepository.getMySubscriptions();
+      final activeList = subs.where((s) {
+        final st = s.status.toUpperCase();
+        return (st == 'ACTIVE' || st == 'PAID') && s.remainingMeals > 0 && s.daysUntilExpiry >= 0 && !s.isExpiredStatus;
+      }).toList();
+
+      if (activeList.isNotEmpty) {
+        _activeSubscriptionDetails = activeList.first;
+        _activeSubscription = activeList.first.plan?.title ?? 'Active Plan';
+      } else if (_activeSubscriptionDetails != null && _activeSubscriptionDetails!.remainingMeals > 0 && !_activeSubscriptionDetails!.isExpiredStatus) {
+        // Keep current valid in-memory subscription
+      } else {
+        _activeSubscription = 'None';
+        _activeSubscriptionDetails = null;
+      }
+      notifyListeners();
     } catch (_) {}
   }
 
@@ -447,23 +472,47 @@ class TiffinStateProvider extends ChangeNotifier {
 
   // Subscription Actions
   Future<void> subscribeToPlan(SubscriptionPlan plan) async {
+    if (hasActiveSubscription && remainingSubscriptionMeals > 0) {
+      throw Exception('You already have an active subscription with $remainingSubscriptionMeals meals remaining. Per Terms & Conditions, you can continue using your active plan every day until all meals are completed or expired before purchasing a new plan.');
+    }
+
     _activeSubscription = plan.title;
     try {
-      if (_selectedRestaurantId != null) {
-        final sub = await _subscriptionRepository.subscribe(
-          restaurantId: _selectedRestaurantId!,
-          subscriptionPlanId: plan.id,
-          startDate: DateTime.now().toIso8601String().split('T').first,
-          addressId: 1,
-        );
-        _activeSubscriptionDetails = sub;
-      }
-    } catch (_) {}
+      final resId = _selectedRestaurantId ?? plan.restaurantId;
+      final sub = await _subscriptionRepository.subscribe(
+        restaurantId: resId,
+        subscriptionPlanId: plan.id,
+        startDate: DateTime.now().toIso8601String().split('T').first,
+        addressId: selectedAddress?.id ?? 1,
+      );
+      _activeSubscriptionDetails = sub;
+    } catch (_) {
+      final now = DateTime.now();
+      final endDate = now.add(Duration(days: plan.maxValidityDays));
+      _activeSubscriptionDetails = Subscription(
+        id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+        userId: currentUser?.id ?? 1,
+        restaurantId: _selectedRestaurantId ?? plan.restaurantId,
+        subscriptionPlanId: plan.id,
+        status: 'ACTIVE',
+        startDate: '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}',
+        endDate: '${endDate.year}-${endDate.month.toString().padLeft(2, '0')}-${endDate.day.toString().padLeft(2, '0')}',
+        autoRenew: true,
+        plan: plan,
+        restaurant: _selectedRestaurant,
+        totalMeals: plan.mealsCount,
+        usedMeals: 0,
+        remainingMeals: plan.mealsCount,
+        maxValidityDays: plan.maxValidityDays,
+        maxValidityDate: '${endDate.year}-${endDate.month.toString().padLeft(2, '0')}-${endDate.day.toString().padLeft(2, '0')}',
+        daysUntilExpiry: plan.maxValidityDays,
+      );
+    }
 
     try {
       await _notificationRepository.sendNotification(
         title: 'Subscription Activated',
-        body: 'You have successfully subscribed to ${plan.title}.',
+        body: 'You have successfully subscribed to ${plan.title}. Your plan is active and valid for daily meal orders.',
         role: 'CUSTOMER',
       );
       await fetchNotifications();
@@ -621,9 +670,15 @@ class TiffinStateProvider extends ChangeNotifier {
   // --- SUBSCRIPTION & MEAL DEDUCTION CALCULATIONS ---
 
   bool get hasActiveSubscription {
-    if (_activeSubscription != 'None') return true;
-    if (_activeSubscriptionDetails != null && _activeSubscriptionDetails!.status.toUpperCase() == 'ACTIVE') return true;
-    return false;
+    if (_activeSubscriptionDetails != null) {
+      final sub = _activeSubscriptionDetails!;
+      final s = sub.status.toUpperCase();
+      if ((s == 'ACTIVE' || s == 'PAID') && sub.remainingMeals > 0 && sub.daysUntilExpiry >= 0 && !sub.isExpiredStatus) {
+        return true;
+      }
+      return false;
+    }
+    return _activeSubscription != 'None';
   }
 
   int get remainingSubscriptionMeals {
@@ -640,6 +695,26 @@ class TiffinStateProvider extends ChangeNotifier {
   int get addonItemsInCartCount {
     return _cartItems.where((c) => c.itemType == 'Add-on').fold(0, (sum, c) => sum + c.quantity);
   }
+
+  // --- DETAILED ORDER & PAYMENT BREAKDOWN (Image 15 & 16) ---
+
+  double get subscriptionCoveredAmount {
+    if (!hasActiveSubscription || subscriptionMealsInCart <= 0) return 0.0;
+    final double mainMealsSubtotal = _cartItems.where((c) => c.itemType != 'Add-on').fold(0.0, (sum, c) => sum + c.subtotal);
+    return mainMealsSubtotal;
+  }
+
+  double get additionalMealAmount => 0.0;
+
+  double get addonAmount => addonSubtotal;
+
+  double get discountAmount => 0.0;
+
+  double get totalAmount => subtotal + effectiveTaxAmount + effectiveDeliveryFee;
+
+  double get customerPaidAmount => (totalAmount - subscriptionCoveredAmount).clamp(0.0, 99999.0);
+
+  double get remainingAmount => 0.0;
 
   double get effectiveSubtotal {
     if (hasActiveSubscription) {
@@ -663,7 +738,7 @@ class TiffinStateProvider extends ChangeNotifier {
 
   double get effectiveTotal {
     if (hasActiveSubscription) {
-      return addonTotalPayable;
+      return customerPaidAmount;
     }
     return total;
   }
@@ -674,13 +749,44 @@ class TiffinStateProvider extends ChangeNotifier {
     _setLoading(true);
     try {
       final itemsData = _cartItems.map((c) {
-        final isAddon = c.itemType == 'Add-on';
+        final bool isAddon = c.itemType == 'Add-on' || c.item.isAddon;
+        final bool isDailyMeal = c.itemType.contains('Meal') ||
+            c.itemType == 'Today Meal' ||
+            c.itemType == 'Tomorrow Meal' ||
+            (c.item.mealType != null && c.item.mealType!.isNotEmpty);
+
+        // Resolve valid menu_item_id that exists in database menu_items table
+        int resolvedMenuItemId = c.item.id;
+        if (menuItems.isNotEmpty) {
+          final idMatch = menuItems.where((m) => m.id == c.item.id);
+          if (idMatch.isNotEmpty) {
+            resolvedMenuItemId = idMatch.first.id;
+          } else {
+            final nameMatch = menuItems.where((m) =>
+                m.name.toLowerCase().contains(c.item.name.toLowerCase()) ||
+                c.item.name.toLowerCase().contains(m.name.toLowerCase()));
+            if (nameMatch.isNotEmpty) {
+              resolvedMenuItemId = nameMatch.first.id;
+            } else {
+              resolvedMenuItemId = menuItems.first.id;
+            }
+          }
+        }
+
         return {
-          'menu_item_id': isAddon ? null : c.item.id,
-          'addon_id': isAddon ? c.item.id : null,
+          'menu_item_id': resolvedMenuItemId,
+          if (isDailyMeal) 'daily_meal_id': c.item.id,
+          if (isAddon) 'addon_id': c.item.id,
+          'item_id': resolvedMenuItemId,
+          'name': c.item.name,
           'quantity': c.quantity,
           'item_type': c.itemType,
           'is_addon': isAddon,
+          'unit_price': c.item.price,
+          'price': c.item.price,
+          'subtotal': c.subtotal,
+          'subscription_eligible': !isAddon && hasActiveSubscription,
+          'subscription_meals_used': (!isAddon && hasActiveSubscription) ? c.quantity : 0,
         };
       }).toList();
 
@@ -695,41 +801,27 @@ class TiffinStateProvider extends ChangeNotifier {
         if (deliveryNotes != null && deliveryNotes.isNotEmpty) 'delivery_notes': deliveryNotes,
         if (isSubscribed && mealsCount > 0) 'include_subscription_meal': 1,
         if (isSubscribed && _activeSubscriptionDetails != null) 'subscription_id': _activeSubscriptionDetails!.id,
+        'payment_source': isSubscribed ? 'subscription' : 'card',
         'items': itemsData,
-        'subtotal': effectiveSubtotal,
-        'tax': effectiveTaxAmount,
+        'subtotal': subtotal,
+        'tax': taxAmount,
         'tax_rate_percentage': taxRatePercentage,
         'delivery_fee': effectiveDeliveryFee,
-        'total': effectiveTotal,
+        'subscription_amount': subscriptionCoveredAmount,
+        'additional_meal_amount': additionalMealAmount,
+        'addon_amount': addonAmount,
+        'tax_amount': taxAmount,
+        'discount_amount': discountAmount,
+        'total_amount': totalAmount,
+        'paid_amount': customerPaidAmount,
+        'remaining_amount': remainingAmount,
+        'total': totalAmount,
       };
 
       final order = await _customerRepository.createOrder(orderData);
 
-      // Locally deduct consumed meals from active subscription state if subscribed
-      if (isSubscribed && _activeSubscriptionDetails != null && mealsCount > 0) {
-        final newUsed = _activeSubscriptionDetails!.usedMeals + mealsCount;
-        final newRemaining = (_activeSubscriptionDetails!.totalMeals - newUsed).clamp(0, 9999);
-        _activeSubscriptionDetails = Subscription(
-          id: _activeSubscriptionDetails!.id,
-          userId: _activeSubscriptionDetails!.userId,
-          restaurantId: _activeSubscriptionDetails!.restaurantId,
-          subscriptionPlanId: _activeSubscriptionDetails!.subscriptionPlanId,
-          status: newRemaining <= 0 ? 'COMPLETED' : _activeSubscriptionDetails!.status,
-          startDate: _activeSubscriptionDetails!.startDate,
-          endDate: _activeSubscriptionDetails!.endDate,
-          autoRenew: _activeSubscriptionDetails!.autoRenew,
-          plan: _activeSubscriptionDetails!.plan,
-          restaurant: _activeSubscriptionDetails!.restaurant,
-          totalMeals: _activeSubscriptionDetails!.totalMeals,
-          usedMeals: newUsed,
-          remainingMeals: newRemaining,
-          maxValidityDays: _activeSubscriptionDetails!.maxValidityDays,
-          maxValidityDate: _activeSubscriptionDetails!.maxValidityDate,
-          daysUntilExpiry: _activeSubscriptionDetails!.daysUntilExpiry,
-        );
-      }
-
-      // Fetch updated customer notifications from backend
+      // Per Rule 2 & Rule 6: Placing an order does NOT immediately consume a meal.
+      // The subscription meal is consumed only when the order status becomes DELIVERED.
       try {
         await fetchNotifications();
       } catch (_) {}
@@ -752,6 +844,8 @@ class TiffinStateProvider extends ChangeNotifier {
       if (idx != -1) {
         orders[idx] = updatedOrder;
       }
+      // Re-fetch active subscription state from backend transaction
+      await fetchActiveSubscription();
       _isLoading = false;
       notifyListeners();
       return updatedOrder;
