@@ -17,33 +17,31 @@ class KinKitchenLogo extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Custom Vector Logo
-        SizedBox(
+        // Brand Logo Image Asset
+        Image.asset(
+          'assets/images/logo.png',
           width: size,
           height: size,
-          child: CustomPaint(
-            painter: LogoPainter(),
-          ),
-        ),
-        if (showText) ...[
-          const SizedBox(height: 16),
-          Text(
-            'KinKitchen',
-            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-              letterSpacing: -0.5,
-            ),
-          ),
-          if (subtitle != null) ...[
-            const SizedBox(height: 8),
-            Text(
-              subtitle!,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: const Color(0xFF6B7280),
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) {
+            return SizedBox(
+              width: size,
+              height: size,
+              child: CustomPaint(
+                painter: LogoPainter(),
               ),
+            );
+          },
+        ),
+        if (showText && subtitle != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            subtitle!,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: const Color(0xFF6B7280),
             ),
-          ],
+          ),
         ],
       ],
     );

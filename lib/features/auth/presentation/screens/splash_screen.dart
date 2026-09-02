@@ -90,7 +90,7 @@ class _SplashScreenState extends State<SplashScreen> {
                     opacity: _opacity,
                     duration: const Duration(milliseconds: 800),
                     child: const KinKitchenLogo(
-                      size: 110,
+                      size: 180,
                       showText: true,
                       subtitle: 'Fresh food, delivered fast to your door.',
                     ),

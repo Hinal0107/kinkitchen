@@ -96,13 +96,13 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
                 // Rounded icon logo
                 Center(
                   child: Container(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFF5E00).withOpacity(0.06),
+                      color: const Color(0xFFFF5E00).withOpacity(0.04),
                       borderRadius: BorderRadius.circular(24),
                     ),
                     child: const KinKitchenLogo(
-                      size: 70,
+                      size: 100,
                       showText: false,
                     ),
                   ),
