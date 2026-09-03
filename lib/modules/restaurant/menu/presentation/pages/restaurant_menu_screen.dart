@@ -31,10 +31,12 @@ class _RestaurantMenuScreenState extends State<RestaurantMenuScreen> {
     final state = RestaurantStateScope.of(context);
     if (!_hasFetchedData && !state.isLoading) {
       _hasFetchedData = true;
-      Future.microtask(() {
-        state.fetchCategories();
-        state.fetchMenuItems();
-      });
+      if (state.menuItems.isEmpty) {
+        Future.microtask(() {
+          state.fetchCategories();
+          state.fetchMenuItems();
+        });
+      }
     }
   }
 

@@ -17,6 +17,7 @@ import 'modules/customer/home/presentation/pages/dashboard_screen.dart';
 import 'modules/restaurant/dashboard/presentation/pages/restaurant_dashboard_screen.dart';
 import 'modules/customer/subscriptions/presentation/pages/terms_and_conditions_screen.dart';
 import 'modules/customer/profile/presentation/pages/notifications_screen.dart';
+import 'modules/customer/orders/presentation/pages/order_tracking_screen.dart';
 import 'modules/customer/tiffin_state_provider.dart';
 
 // BLoC Imports
@@ -102,6 +103,25 @@ class MyApp extends StatelessWidget {
             '/terms-and-conditions': (context) => const TermsAndConditionsScreen(),
             '/notifications': (context) => const NotificationsScreen(isRestaurant: false),
             '/restaurant-notifications': (context) => const NotificationsScreen(isRestaurant: true),
+          },
+          onGenerateRoute: (settings) {
+            final uri = Uri.parse(settings.name ?? '');
+            if (uri.pathSegments.length == 2 && uri.pathSegments.first == 'orders') {
+              final id = int.tryParse(uri.pathSegments[1]);
+              if (id != null) {
+                return MaterialPageRoute(
+                  builder: (context) => OrderTrackingScreen(orderId: id),
+                  settings: settings,
+                );
+              }
+            }
+            if (settings.name == '/orders/tracking' && settings.arguments is int) {
+              return MaterialPageRoute(
+                builder: (context) => OrderTrackingScreen(orderId: settings.arguments as int),
+                settings: settings,
+              );
+            }
+            return null;
           },
         ),
       ),

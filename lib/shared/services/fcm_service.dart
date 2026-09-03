@@ -8,11 +8,26 @@ import 'package:kinkitchen/core/network/api_client.dart';
 import 'package:kinkitchen/app/constants/api_constants.dart';
 
 class FcmService {
+  static final FcmService _instance = FcmService._internal();
+  factory FcmService() => _instance;
+  FcmService._internal();
+
   final FirebaseMessaging _messaging = FirebaseMessaging.instance;
   final ApiClient _apiClient = ApiClient();
   final _secureStorage = const FlutterSecureStorage();
 
+  bool _isInitialized = false;
+  String? _cachedToken;
+  String? _lastSyncedToken;
+
   Future<void> initialize() async {
+    if (_isInitialized) {
+      debugPrint('FCM: initialization skipped - already initialized');
+      return;
+    }
+    _isInitialized = true;
+    debugPrint('FCM: initialization started');
+
     // 1. Request notification permission
     NotificationSettings settings = await _messaging.requestPermission(
       alert: true,
@@ -35,6 +50,7 @@ class FcmService {
 
     // 2. Setup token refresh listener
     _messaging.onTokenRefresh.listen((newToken) async {
+      _cachedToken = newToken;
       if (kDebugMode) {
         print('FCM Token refreshed: $newToken');
       }
@@ -93,6 +109,16 @@ class FcmService {
 
   void _handleNotificationTap(RemoteMessage message) {
     final type = message.data['type']?.toString().toLowerCase() ?? '';
+    final orderIdRaw = message.data['order_id'] ?? message.data['id'];
+
+    if (orderIdRaw != null) {
+      final orderId = int.tryParse(orderIdRaw.toString());
+      if (orderId != null) {
+        NavigationService.navigatorKey.currentState?.pushNamed('/orders/$orderId');
+        return;
+      }
+    }
+
     if (type.contains('new_order') || type.contains('receipt')) {
       NavigationService.navigatorKey.currentState?.pushNamed('/restaurant-notifications');
     } else {
@@ -100,7 +126,10 @@ class FcmService {
     }
   }
 
-  Future<String?> getFcmToken() async {
+  Future<String?> getFcmToken({bool forceRefresh = false}) async {
+    if (!forceRefresh && _cachedToken != null) {
+      return _cachedToken;
+    }
     try {
       if (Platform.isIOS) {
         final apnsToken = await _messaging.getAPNSToken();
@@ -111,6 +140,7 @@ class FcmService {
         // Firebase servers reject fake APNs token. Provide fallback token for simulator.
         if (apnsToken != null && apnsToken.toLowerCase().contains('66616b652d')) {
           const simToken = 'ios_sim_fcm_token_66616b652d';
+          _cachedToken = simToken;
           if (kDebugMode) {
             print('FCM Token (Simulator Fallback): $simToken');
           }
@@ -118,6 +148,9 @@ class FcmService {
         }
       }
       final token = await _messaging.getToken();
+      if (token != null) {
+        _cachedToken = token;
+      }
       if (kDebugMode) {
         print('FCM Token: $token');
       }
@@ -126,11 +159,17 @@ class FcmService {
       if (kDebugMode) {
         print('Error getting FCM token (Simulator Fallback applied): $e');
       }
-      return 'ios_sim_fcm_token_${DateTime.now().millisecondsSinceEpoch}';
+      _cachedToken = 'ios_sim_fcm_token_${DateTime.now().millisecondsSinceEpoch}';
+      return _cachedToken;
     }
   }
 
   Future<void> syncTokenWithBackend(String fcmToken) async {
+    // Avoid duplicate sync for the same token
+    if (_lastSyncedToken == fcmToken) {
+      return;
+    }
+
     // Check if user is authenticated
     final sanctumToken = await _secureStorage.read(key: 'auth_token');
     if (sanctumToken == null) {
@@ -155,6 +194,7 @@ class FcmService {
 
     try {
       await _apiClient.post(ApiConfig.registerFcmToken, body: payload);
+      _lastSyncedToken = fcmToken;
     } catch (e) {
       if (kDebugMode) {
         print('Ignored sync FCM Token error: $e');

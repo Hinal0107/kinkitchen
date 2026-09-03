@@ -141,8 +141,6 @@ class Order {
       'addon_amount': addonAmount,
       'discount_amount': discountAmount,
       'total_amount': total,
-      'paid_amount': paidAmount,
-      'remaining_amount': remainingAmount,
       'delivery_notes': deliveryNotes,
       'customer_name': customerName,
       'customer_phone': customerPhone,
@@ -152,3 +150,88 @@ class Order {
     };
   }
 }
+
+class OrderStatus {
+  static const String pendingPayment = 'PENDING_PAYMENT';
+  static const String confirmed = 'CONFIRMED';
+  static const String preparing = 'PREPARING';
+  static const String ready = 'READY';
+  static const String completed = 'COMPLETED';
+  static const String cancelled = 'CANCELLED';
+}
+
+class DeliveryStatus {
+  static const String pending = 'PENDING';
+  static const String outForDelivery = 'OUT_FOR_DELIVERY';
+  static const String delivered = 'DELIVERED';
+}
+
+class OrderTrackingTimelineStep {
+  final String status;
+  final String timestamp;
+
+  OrderTrackingTimelineStep({
+    required this.status,
+    required this.timestamp,
+  });
+
+  factory OrderTrackingTimelineStep.fromJson(Map<String, dynamic> json) {
+    return OrderTrackingTimelineStep(
+      status: json['status']?.toString() ?? '',
+      timestamp: json['timestamp']?.toString() ?? '',
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'status': status,
+        'timestamp': timestamp,
+      };
+}
+
+class OrderTrackingData {
+  final int orderId;
+  final String orderNumber;
+  final String orderStatus;
+  final String deliveryStatus;
+  final String? deliveryOtp;
+  final String restaurantName;
+  final String scheduledDate;
+  final List<OrderTrackingTimelineStep> timeline;
+
+  OrderTrackingData({
+    required this.orderId,
+    required this.orderNumber,
+    required this.orderStatus,
+    required this.deliveryStatus,
+    this.deliveryOtp,
+    required this.restaurantName,
+    required this.scheduledDate,
+    required this.timeline,
+  });
+
+  factory OrderTrackingData.fromJson(Map<String, dynamic> json) {
+    int toInt(dynamic val) {
+      if (val is int) return val;
+      if (val is num) return val.toInt();
+      if (val is String) return int.tryParse(val) ?? 0;
+      return 0;
+    }
+
+    final rawTimeline = json['timeline'] as List<dynamic>? ?? [];
+    final timelineList = rawTimeline
+        .map((t) => OrderTrackingTimelineStep.fromJson(t as Map<String, dynamic>))
+        .toList();
+
+    return OrderTrackingData(
+      orderId: toInt(json['order_id'] ?? json['id']),
+      orderNumber: json['order_number']?.toString() ?? '',
+      orderStatus: json['order_status']?.toString() ?? json['status']?.toString() ?? OrderStatus.pendingPayment,
+      deliveryStatus: json['delivery_status']?.toString() ?? DeliveryStatus.pending,
+      deliveryOtp: json['delivery_otp']?.toString(),
+      restaurantName: json['restaurant_name']?.toString() ?? 'Kin Kitchen',
+      scheduledDate: json['scheduled_date']?.toString() ?? '',
+      timeline: timelineList,
+    );
+  }
+}
+

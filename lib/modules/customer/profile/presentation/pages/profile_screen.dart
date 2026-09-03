@@ -23,7 +23,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final state = TiffinStateScope.of(context);
     if (!_hasFetchedProfile) {
       _hasFetchedProfile = true;
-      state.fetchCurrentUserProfile();
+      if (state.currentUser == null && !state.isLoading) {
+        state.fetchCurrentUserProfile();
+      }
     }
   }
 

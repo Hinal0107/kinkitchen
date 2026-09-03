@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:kinkitchen/modules/restaurant/restaurant_state_provider.dart';
 import 'package:kinkitchen/modules/restaurant/dashboard/presentation/pages/restaurant_dashboard_screen.dart';
 import 'package:kinkitchen/shared/models/order.dart';
+import 'package:kinkitchen/shared/repositories/order_repository.dart';
 
 class RestaurantOrdersScreen extends StatefulWidget {
   const RestaurantOrdersScreen({super.key});
@@ -32,7 +33,9 @@ class _RestaurantOrdersScreenState extends State<RestaurantOrdersScreen> with Si
     final state = RestaurantStateScope.of(context);
     if (!_hasFetchedInitialData && !state.isLoading && state.errorMessage == null) {
       _hasFetchedInitialData = true;
-      Future.microtask(() => state.fetchOrders());
+      if (state.orders.isEmpty) {
+        Future.microtask(() => state.fetchOrders());
+      }
     }
   }
 
@@ -69,7 +72,7 @@ class _RestaurantOrdersScreenState extends State<RestaurantOrdersScreen> with Si
           ),
         ],
       ),
-      body: state.isLoading
+      body: state.isLoading && state.orders.isEmpty
           ? const Center(child: CircularProgressIndicator(color: merchantGreen))
           : TabBarView(
               controller: _tabController,
@@ -84,9 +87,17 @@ class _RestaurantOrdersScreenState extends State<RestaurantOrdersScreen> with Si
 
   List<Order> _filterOrders(List<Order> orders, String type) {
     if (type == 'completed') {
-      return orders.where((o) => o.status == 'DELIVERED' || o.status == 'REJECTED' || o.status == 'CANCELLED').toList();
+      return orders.where((o) {
+        final s = o.status.toUpperCase();
+        final ds = (o.deliveryStatus ?? '').toUpperCase();
+        return s == 'DELIVERED' || s == 'COMPLETED' || s == 'REJECTED' || s == 'CANCELLED' || ds == 'DELIVERED';
+      }).toList();
     } else if (type == 'active') {
-      return orders.where((o) => o.status != 'DELIVERED' && o.status != 'REJECTED' && o.status != 'CANCELLED').toList();
+      return orders.where((o) {
+        final s = o.status.toUpperCase();
+        final ds = (o.deliveryStatus ?? '').toUpperCase();
+        return s != 'DELIVERED' && s != 'COMPLETED' && s != 'REJECTED' && s != 'CANCELLED' && ds != 'DELIVERED';
+      }).toList();
     }
     return orders;
   }
@@ -295,9 +306,56 @@ class _RestaurantOrdersScreenState extends State<RestaurantOrdersScreen> with Si
                   ),
                 ),
 
+                // Customer Delivery OTP Banner when OUT_FOR_DELIVERY or deliveryOtp is present
+                if (order.status.toUpperCase() == 'OUT_FOR_DELIVERY' || (order.deliveryOtp != null && order.deliveryOtp!.isNotEmpty)) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF7ED),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFFFFEDD5)),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: const [
+                              Icon(Icons.shield_outlined, size: 20, color: Color(0xFFC2410C)),
+                              SizedBox(width: 8),
+                              Text(
+                                'Customer Delivery OTP:',
+                                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFC2410C)),
+                              ),
+                            ],
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: const Color(0xFFF97316)),
+                            ),
+                            child: Text(
+                              (order.deliveryOtp != null && order.deliveryOtp!.isNotEmpty) ? order.deliveryOtp! : 'PENDING',
+                              style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 2,
+                                color: Color(0xFFC2410C),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+
                 // Action Buttons based on Order Status Tree:
-                // PENDING -> REJECTED or CONFIRMED -> PREPARING -> READY -> OUT_FOR_DELIVERY -> DELIVERED
-                if (order.status == 'PENDING') ...[
+                // PENDING / PENDING_PAYMENT -> REJECTED or CONFIRMED -> PREPARING -> READY -> OUT_FOR_DELIVERY -> DELIVERED
+                if (order.status.toUpperCase() == 'PENDING' || order.status.toUpperCase() == 'PENDING_PAYMENT') ...[
                   const Divider(height: 1, color: Color(0xFFE5E7EB)),
                   Padding(
                     padding: const EdgeInsets.all(12.0),
@@ -338,7 +396,7 @@ class _RestaurantOrdersScreenState extends State<RestaurantOrdersScreen> with Si
                       ],
                     ),
                   ),
-                ] else if (order.status != 'DELIVERED' && order.status != 'REJECTED' && order.status != 'CANCELLED') ...[
+                ] else if (order.status.toUpperCase() != 'DELIVERED' && order.status.toUpperCase() != 'COMPLETED' && order.status.toUpperCase() != 'REJECTED' && order.status.toUpperCase() != 'CANCELLED' && (order.deliveryStatus ?? '').toUpperCase() != 'DELIVERED') ...[
                   const Divider(height: 1, color: Color(0xFFE5E7EB)),
                   Padding(
                     padding: const EdgeInsets.all(12.0),
@@ -353,7 +411,7 @@ class _RestaurantOrdersScreenState extends State<RestaurantOrdersScreen> with Si
                         ),
                         onPressed: () => _updateStatusDialog(state, order),
                         child: Text(
-                          _getActionButtonLabel(order.status),
+                          _getActionButtonLabel(order),
                           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                         ),
                       ),
@@ -373,6 +431,7 @@ class _RestaurantOrdersScreenState extends State<RestaurantOrdersScreen> with Si
     Color fg;
     switch (status.toUpperCase()) {
       case 'PENDING':
+      case 'PENDING_PAYMENT':
         bg = const Color(0xFFFEF3C7);
         fg = const Color(0xFFD97706);
         break;
@@ -398,6 +457,7 @@ class _RestaurantOrdersScreenState extends State<RestaurantOrdersScreen> with Si
         fg = const Color(0xFF7C3AED);
         break;
       case 'DELIVERED':
+      case 'COMPLETED':
         bg = const Color(0xFFDEF7EC);
         fg = const Color(0xFF03543F);
         break;
@@ -419,9 +479,15 @@ class _RestaurantOrdersScreenState extends State<RestaurantOrdersScreen> with Si
     );
   }
 
-  String _getActionButtonLabel(String status) {
-    switch (status.toUpperCase()) {
+  String _getActionButtonLabel(Order order) {
+    final status = order.status.toUpperCase();
+    final hasOtp = order.deliveryOtp != null && order.deliveryOtp!.isNotEmpty;
+    if (status == 'OUT_FOR_DELIVERY' || hasOtp) {
+      return 'Verify OTP & Mark Delivered';
+    }
+    switch (status) {
       case 'PENDING':
+      case 'PENDING_PAYMENT':
         return 'Confirm Order';
       case 'CONFIRMED':
         return 'Start Preparing';
@@ -439,6 +505,7 @@ class _RestaurantOrdersScreenState extends State<RestaurantOrdersScreen> with Si
   String _getNextStatus(String status) {
     switch (status.toUpperCase()) {
       case 'PENDING':
+      case 'PENDING_PAYMENT':
         return 'CONFIRMED';
       case 'CONFIRMED':
         return 'PREPARING';
@@ -449,145 +516,229 @@ class _RestaurantOrdersScreenState extends State<RestaurantOrdersScreen> with Si
       case 'OUT_FOR_DELIVERY':
         return 'DELIVERED';
       default:
-        return 'DELIVERED';
+        return 'CONFIRMED';
     }
   }
 
   void _confirmOrderDialog(RestaurantStateProvider state, Order order) {
+    bool isSubmitting = false;
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Confirm Order', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-        content: Text('Are you sure you want to confirm Order #${order.orderNumber}?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel', style: TextStyle(color: Color(0xFF6B7280))),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00A859),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            onPressed: () async {
-              try {
-                await state.updateOrderStatus(order.id, 'CONFIRMED');
-                if (mounted) {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Order Confirmed!'), backgroundColor: Color(0xFF00A859)),
-                  );
-                }
-              } catch (e) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error: ${e.toString()}'), backgroundColor: Colors.red),
-                  );
-                }
-              }
-            },
-            child: const Text('Confirm Order'),
-          ),
-        ],
-      ),
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: const Text('Confirm Order', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              content: Text('Are you sure you want to confirm Order #${order.orderNumber}?'),
+              actions: [
+                TextButton(
+                  onPressed: isSubmitting ? null : () => Navigator.pop(dialogContext),
+                  child: const Text('Cancel', style: TextStyle(color: Color(0xFF6B7280))),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF00A859),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onPressed: isSubmitting
+                      ? null
+                      : () async {
+                          setDialogState(() => isSubmitting = true);
+                          try {
+                            if (order.status.toUpperCase() == 'PENDING_PAYMENT' || order.paymentStatus.toUpperCase() == 'PENDING_PAYMENT') {
+                              try {
+                                await OrderRepository().simulateWorldpayPayment(orderNumber: order.orderNumber);
+                              } catch (_) {}
+                            }
+                            await state.updateOrderStatus(order.id, 'CONFIRMED');
+                            if (mounted) {
+                              Navigator.pop(dialogContext);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Order Confirmed!'), backgroundColor: Color(0xFF00A859)),
+                              );
+                            }
+                          } catch (e) {
+                            setDialogState(() => isSubmitting = false);
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Order Error: ${e.toString().replaceAll('Exception: ', '')}'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
+                          }
+                        },
+                  child: isSubmitting
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Text('Confirm Order'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
   void _rejectOrderDialog(RestaurantStateProvider state, Order order) {
+    final reasonController = TextEditingController(text: 'Out of ingredients');
+    bool isSubmitting = false;
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Reject Order', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.red)),
-        content: Text('Are you sure you want to REJECT Order #${order.orderNumber}? This action cannot be undone.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel', style: TextStyle(color: Color(0xFF6B7280))),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            onPressed: () async {
-              try {
-                await state.updateOrderStatus(order.id, 'REJECTED');
-                if (mounted) {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Order Rejected'), backgroundColor: Colors.red),
-                  );
-                }
-              } catch (e) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error: ${e.toString()}'), backgroundColor: Colors.red),
-                  );
-                }
-              }
-            },
-            child: const Text('Reject Order'),
-          ),
-        ],
-      ),
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: const Text('Reject / Cancel Order', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.red)),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Are you sure you want to REJECT Order #${order.orderNumber}? This action cannot be undone.'),
+                  const SizedBox(height: 14),
+                  const Text('Reason for rejection:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF374151))),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: reasonController,
+                    decoration: InputDecoration(
+                      hintText: 'e.g. Out of ingredients',
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isSubmitting ? null : () => Navigator.pop(dialogContext),
+                  child: const Text('Cancel', style: TextStyle(color: Color(0xFF6B7280))),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onPressed: isSubmitting
+                      ? null
+                      : () async {
+                          final reason = reasonController.text.trim();
+                          setDialogState(() => isSubmitting = true);
+                          try {
+                            await state.updateOrderStatus(order.id, 'REJECTED', reason: reason.isNotEmpty ? reason : 'Out of ingredients');
+                            if (mounted) {
+                              Navigator.pop(dialogContext);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Order Rejected'), backgroundColor: Colors.red),
+                              );
+                            }
+                          } catch (e) {
+                            setDialogState(() => isSubmitting = false);
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Error: ${e.toString().replaceAll('Exception: ', '')}'), backgroundColor: Colors.red),
+                              );
+                            }
+                          }
+                        },
+                  child: isSubmitting
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Text('Reject Order'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
   void _updateStatusDialog(RestaurantStateProvider state, Order order) {
-    final nextStatus = _getNextStatus(order.status);
+    final hasOtp = order.deliveryOtp != null && order.deliveryOtp!.isNotEmpty;
+    final isOutForDelivery = order.status.toUpperCase() == 'OUT_FOR_DELIVERY';
 
+    if (isOutForDelivery || hasOtp) {
+      _showOtpVerificationDialog(state, order);
+      return;
+    }
+
+    final nextStatus = _getNextStatus(order.status);
     if (nextStatus == 'DELIVERED') {
       _showOtpVerificationDialog(state, order);
       return;
     }
 
+    bool isSubmitting = false;
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Update Order Status', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-        content: Text('Change order #${order.orderNumber} status from "${order.status}" to "$nextStatus"?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel', style: TextStyle(color: Color(0xFF6B7280))),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00A859),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            onPressed: () async {
-              try {
-                await state.updateOrderStatus(order.id, nextStatus);
-                if (mounted) {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Order status updated to $nextStatus!')),
-                  );
-                }
-              } catch (e) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error: ${e.toString()}'), backgroundColor: Colors.red),
-                  );
-                }
-              }
-            },
-            child: const Text('Update Status'),
-          ),
-        ],
-      ),
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: const Text('Update Order Status', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              content: Text('Change order #${order.orderNumber} status from "${order.status}" to "$nextStatus"?'),
+              actions: [
+                TextButton(
+                  onPressed: isSubmitting ? null : () => Navigator.pop(dialogContext),
+                  child: const Text('Cancel', style: TextStyle(color: Color(0xFF6B7280))),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF00A859),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onPressed: isSubmitting
+                      ? null
+                      : () async {
+                          setDialogState(() => isSubmitting = true);
+                          try {
+                            if (order.paymentStatus.toUpperCase() == 'PENDING_PAYMENT' || order.status.toUpperCase() == 'PENDING_PAYMENT') {
+                              try {
+                                await OrderRepository().simulateWorldpayPayment(orderNumber: order.orderNumber);
+                              } catch (_) {}
+                            }
+                            await state.updateOrderStatus(order.id, nextStatus);
+                            if (mounted) {
+                              Navigator.pop(dialogContext);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Order status updated to $nextStatus!'), backgroundColor: const Color(0xFF00A859)),
+                              );
+                            }
+                          } catch (e) {
+                            setDialogState(() => isSubmitting = false);
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Error: ${e.toString().replaceAll('Exception: ', '')}'), backgroundColor: Colors.red),
+                              );
+                            }
+                          }
+                        },
+                  child: isSubmitting
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Text('Update Status'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
   void _showOtpVerificationDialog(RestaurantStateProvider state, Order order) {
-    final otpController = TextEditingController();
+    final otpController = TextEditingController(text: order.deliveryOtp ?? '');
     bool isSubmitting = false;
 
     showDialog(

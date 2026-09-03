@@ -258,9 +258,10 @@ class RestaurantRepository {
   }
 
   // --- 🚀 ORDERS ---
-  Future<List<Order>> getOrders({String? status, int limit = 50}) async {
+  Future<List<Order>> getOrders({String? status, String? date, int limit = 50}) async {
     final queryParams = {
       if (status != null && status.isNotEmpty) 'status': status,
+      if (date != null && date.isNotEmpty) 'date': date,
       'limit': limit.toString(),
     };
     final response = await _apiClient.get(ApiConfig.restaurantOrders, queryParameters: queryParams);
@@ -269,12 +270,42 @@ class RestaurantRepository {
     return list.map((json) => Order.fromJson(json as Map<String, dynamic>)).toList();
   }
 
-  Future<Order> updateOrderStatus(int id, String status, {String? deliveryOtp}) async {
-    final String endpointAction = status.toLowerCase().replaceAll('_', '-');
-    final Map<String, dynamic>? body = (deliveryOtp != null && deliveryOtp.isNotEmpty)
-        ? {'delivery_otp': deliveryOtp}
-        : null;
-    final response = await _apiClient.post('${ApiConfig.restaurantOrders}/$id/$endpointAction', body: body);
+  Future<Order> updateOrderStatus(int id, String status, {String? deliveryOtp, String? reason}) async {
+    String endpoint;
+    Map<String, dynamic>? body;
+
+    switch (status.toUpperCase()) {
+      case 'CONFIRMED':
+        endpoint = ApiConfig.confirmOrder(id);
+        break;
+      case 'PREPARING':
+        endpoint = ApiConfig.preparingOrder(id);
+        break;
+      case 'READY':
+        endpoint = ApiConfig.readyOrder(id);
+        break;
+      case 'OUT_FOR_DELIVERY':
+        endpoint = ApiConfig.outForDeliveryOrder(id);
+        break;
+      case 'DELIVERED':
+      case 'COMPLETED':
+        endpoint = ApiConfig.deliveredOrder(id);
+        if (deliveryOtp != null && deliveryOtp.isNotEmpty) {
+          body = {'delivery_otp': deliveryOtp};
+        }
+        break;
+      case 'CANCELLED':
+      case 'REJECTED':
+        endpoint = ApiConfig.cancelRestaurantOrder(id);
+        if (reason != null && reason.isNotEmpty) {
+          body = {'reason': reason};
+        }
+        break;
+      default:
+        endpoint = '${ApiConfig.restaurantOrders}/$id/${status.toLowerCase().replaceAll('_', '-')}';
+    }
+
+    final response = await _apiClient.post(endpoint, body: body);
     final data = response['data'] ?? response['order'] ?? response;
     return Order.fromJson(data as Map<String, dynamic>);
   }

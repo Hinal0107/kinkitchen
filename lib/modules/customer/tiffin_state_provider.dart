@@ -109,6 +109,11 @@ class TiffinStateProvider extends ChangeNotifier {
   final List<ClientCartItem> _cartItems = [];
   List<ClientCartItem> get cartItems => _cartItems;
 
+  bool _isInitialDataLoaded = false;
+  bool get isInitialDataLoaded => _isInitialDataLoaded;
+  bool _isFetchingSelectedData = false;
+  int? _lastFetchedRestaurantId;
+
   TiffinStateProvider() {
     _loadStoredSelectedRestaurant();
   }
@@ -149,7 +154,7 @@ class TiffinStateProvider extends ChangeNotifier {
     } catch (_) {}
 
     notifyListeners();
-    await fetchSelectedRestaurantData();
+    await fetchSelectedRestaurantData(forceRefresh: true);
   }
 
   void setCategory(String category) {
@@ -217,14 +222,28 @@ class TiffinStateProvider extends ChangeNotifier {
   // 2. Fetch All Data for Currently Selected Restaurant
   Future<void> fetchRestaurantDetails(int restaurantId) async {
     _selectedRestaurantId = restaurantId;
-    await fetchSelectedRestaurantData();
+    await fetchSelectedRestaurantData(forceRefresh: true);
   }
 
-  Future<void> fetchSelectedRestaurantData() async {
+  Future<void> fetchSelectedRestaurantData({bool forceRefresh = false}) async {
     if (_selectedRestaurantId == null) {
       _selectedRestaurantId = 1;
     }
+    
+    // Prevent duplicate parallel or unnecessary repeated requests
+    if (_isFetchingSelectedData) {
+      debugPrint('TiffinState: fetchSelectedRestaurantData skipped - already fetching');
+      return;
+    }
+    if (!forceRefresh && _isInitialDataLoaded && _lastFetchedRestaurantId == _selectedRestaurantId) {
+      debugPrint('TiffinState: fetchSelectedRestaurantData skipped - data already loaded for restaurant $_selectedRestaurantId');
+      return;
+    }
+
+    _isFetchingSelectedData = true;
+    debugPrint('TiffinState: fetchSelectedRestaurantData started');
     _setLoading(true);
+
     try {
       final resId = _selectedRestaurantId!;
       // Fetch details in parallel / sequence
@@ -283,9 +302,15 @@ class TiffinStateProvider extends ChangeNotifier {
       await fetchActiveSubscription();
       await fetchCurrentUserProfile();
       await fetchNotifications();
+
+      _isInitialDataLoaded = true;
+      _lastFetchedRestaurantId = resId;
+      _isFetchingSelectedData = false;
       _isLoading = false;
+      debugPrint('TiffinState: fetchSelectedRestaurantData completed');
       notifyListeners();
     } catch (e) {
+      _isFetchingSelectedData = false;
       _setError(e.toString());
     }
   }

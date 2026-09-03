@@ -59,9 +59,20 @@ class OrderRepository {
   }
 
   // 5. Track Order Timeline
-  Future<Map<String, dynamic>> getOrderTracking(int orderId) async {
+  Future<OrderTrackingData> getOrderTracking(int orderId) async {
     final response = await _apiClient.get(ApiConfig.orderTracking(orderId));
-    return (response['data'] ?? response) as Map<String, dynamic>;
+    final data = (response['data'] ?? response) as Map<String, dynamic>;
+    return OrderTrackingData.fromJson(data);
+  }
+
+  // 5a. Customer Confirm Order Received via OTP
+  Future<Order> confirmOrderReceived(int orderId, {String? deliveryOtp}) async {
+    final response = await _apiClient.post(
+      '/orders/$orderId/confirm-received',
+      body: deliveryOtp != null ? {'delivery_otp': deliveryOtp} : null,
+    );
+    final data = response['data'] ?? response['order'] ?? response;
+    return Order.fromJson(data as Map<String, dynamic>);
   }
 
   // 5b. Simulate Worldpay Payment (Dev/Sandbox)
@@ -82,9 +93,10 @@ class OrderRepository {
   // --- 🏪 RESTAURANT ORDERS ---
 
   // 6. List Restaurant Orders
-  Future<List<Order>> getRestaurantOrders({String? status, int limit = 20}) async {
+  Future<List<Order>> getRestaurantOrders({String? status, String? date, int limit = 20}) async {
     final queryParams = {
       if (status != null && status.isNotEmpty) 'status': status,
+      if (date != null && date.isNotEmpty) 'date': date,
       'limit': limit.toString(),
     };
     final response = await _apiClient.get(ApiConfig.restaurantOrders, queryParameters: queryParams);

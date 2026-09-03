@@ -22,7 +22,7 @@ class OrderDetailsLoaded extends CustomerOrdersState {
 }
 
 class OrderTrackingLoaded extends CustomerOrdersState {
-  final Map<String, dynamic> trackingData;
+  final OrderTrackingData trackingData;
   OrderTrackingLoaded(this.trackingData);
 }
 

@@ -109,7 +109,7 @@ class RestaurantDashboardScreenState extends State<RestaurantDashboardScreen> {
                       _buildNavItem(0, Icons.home_outlined, Icons.home, 'Home', _currentIndex == 0, activeColor, inactiveColor),
                       _buildNavItem(1, Icons.restaurant_menu_outlined, Icons.restaurant_menu, 'Menu', _currentIndex == 1, activeColor, inactiveColor),
                       _buildNavItem(2, Icons.calendar_month_outlined, Icons.calendar_month, 'Plans', _currentIndex == 2, activeColor, inactiveColor),
-                      _buildNavItem(3, Icons.receipt_long_outlined, Icons.receipt_long, 'Orders', _currentIndex == 3, activeColor, inactiveColor, badgeCount: _stateProvider.unreadNotificationCount),
+                      _buildNavItem(3, Icons.receipt_long_outlined, Icons.receipt_long, 'Orders', _currentIndex == 3, activeColor, inactiveColor, badgeCount: _stateProvider.activeOrdersCount),
                       _buildNavItem(4, Icons.person_outline, Icons.person, 'Profile', _currentIndex == 4, activeColor, inactiveColor),
                     ],
                   ),

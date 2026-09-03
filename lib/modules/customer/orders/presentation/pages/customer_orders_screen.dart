@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:kinkitchen/core/widgets/food_image.dart';
 import 'package:kinkitchen/modules/customer/home/presentation/pages/dashboard_screen.dart';
+import 'package:kinkitchen/modules/customer/orders/presentation/pages/order_tracking_screen.dart';
 import 'package:kinkitchen/modules/customer/tiffin_state_provider.dart';
 import 'package:kinkitchen/shared/models/order.dart';
 
@@ -330,6 +331,31 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
                       ),
                     ),
                   ],
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: brandOrange,
+                      side: const BorderSide(color: brandOrange, width: 1.5),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                    ),
+                    icon: const Icon(Icons.alt_route_rounded, size: 18),
+                    label: const Text(
+                      'Track Live Order',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => OrderTrackingScreen(orderId: order.id),
+                        ),
+                      );
+                    },
+                  ),
                 ),
 
                 // OTP REVEAL & CONFIRMATION SECTION FOR OUT_FOR_DELIVERY

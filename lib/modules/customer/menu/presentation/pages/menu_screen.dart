@@ -22,7 +22,7 @@ class _MenuScreenState extends State<MenuScreen> {
     final state = TiffinStateScope.of(context);
     if (!_hasFetchedMenu) {
       _hasFetchedMenu = true;
-      if (state.selectedRestaurantId != null) {
+      if (state.selectedRestaurantId != null && state.menuItems.isEmpty && !state.isLoading) {
         Future.microtask(() => state.fetchRestaurantMenu());
       }
     }

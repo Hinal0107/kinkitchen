@@ -67,6 +67,13 @@ class RestaurantStateProvider extends ChangeNotifier {
   int get totalItemsCount => menuItems.length;
   int get activeItemsCount => menuItems.where((i) => i.availability).length;
   int get categoriesCount => categories.length;
+  int get activeOrdersCount {
+    return orders.where((o) {
+      final s = o.status.toUpperCase();
+      final ds = (o.deliveryStatus ?? '').toUpperCase();
+      return s != 'DELIVERED' && s != 'COMPLETED' && s != 'REJECTED' && s != 'CANCELLED' && ds != 'DELIVERED';
+    }).length;
+  }
 
   MenuCategory? get addonsCategory {
     try {
@@ -213,7 +220,48 @@ class RestaurantStateProvider extends ChangeNotifier {
     }).toList();
   }
 
+  bool _isInitialDataLoaded = false;
+  bool get isInitialDataLoaded => _isInitialDataLoaded;
+  bool _isFetchingAllData = false;
+
   // --- API FETCH CALLS ---
+
+  Future<void> fetchAllRestaurantData({bool forceRefresh = false}) async {
+    if (_isFetchingAllData) {
+      debugPrint('RestaurantState: fetchAllRestaurantData skipped - already fetching');
+      return;
+    }
+    if (!forceRefresh && _isInitialDataLoaded) {
+      debugPrint('RestaurantState: fetchAllRestaurantData skipped - data already loaded');
+      return;
+    }
+
+    _isFetchingAllData = true;
+    debugPrint('RestaurantState: fetchAllRestaurantData started');
+    _setLoading(true);
+
+    try {
+      try { profile = await _restaurantRepository.getProfile(); } catch (_) {}
+      try { categories = await _restaurantRepository.getCategories(); } catch (_) {}
+      try { menuItems = await _restaurantRepository.getMenuItems(); } catch (_) {}
+      try { dailyMeals = await _restaurantRepository.getDailyMeals(); } catch (_) {}
+      try { subscriptionPlans = await _restaurantRepository.getPlans(); } catch (_) {}
+      try { orders = await _restaurantRepository.getOrders(); } catch (_) {}
+      try {
+        notifications = await _notificationRepository.getNotifications();
+        unreadNotificationCount = await _notificationRepository.getUnreadCount();
+      } catch (_) {}
+
+      _isInitialDataLoaded = true;
+      _isFetchingAllData = false;
+      _isLoading = false;
+      debugPrint('RestaurantState: fetchAllRestaurantData completed');
+      notifyListeners();
+    } catch (e) {
+      _isFetchingAllData = false;
+      _setError(e.toString());
+    }
+  }
 
   Future<void> fetchProfile() async {
     _setLoading(true);
@@ -270,10 +318,10 @@ class RestaurantStateProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> fetchOrders() async {
+  Future<void> fetchOrders({String? status, String? date}) async {
     _setLoading(true);
     try {
-      orders = await _restaurantRepository.getOrders();
+      orders = await _restaurantRepository.getOrders(status: status, date: date);
       await fetchNotifications();
       _isLoading = false;
       notifyListeners();
@@ -831,10 +879,10 @@ class RestaurantStateProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> updateOrderStatus(int id, String status, {String? deliveryOtp}) async {
+  Future<void> updateOrderStatus(int id, String status, {String? deliveryOtp, String? reason}) async {
     _setLoading(true);
     try {
-      await _restaurantRepository.updateOrderStatus(id, status, deliveryOtp: deliveryOtp);
+      await _restaurantRepository.updateOrderStatus(id, status, deliveryOtp: deliveryOtp, reason: reason);
       orders = await _restaurantRepository.getOrders();
 
       try {

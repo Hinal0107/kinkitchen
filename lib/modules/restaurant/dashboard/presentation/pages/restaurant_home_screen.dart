@@ -34,13 +34,7 @@ class _RestaurantHomeScreenState extends State<RestaurantHomeScreen>
         state.errorMessage == null) {
       _hasFetchedInitialData = true;
       Future.microtask(() {
-        state.fetchProfile();
-        state.fetchCategories();
-        state.fetchMenuItems();
-        state.fetchDailyMeals();
-        state.fetchPlans();
-        state.fetchOrders();
-        state.fetchNotifications();
+        state.fetchAllRestaurantData();
       });
     }
   }

@@ -108,8 +108,16 @@ class ApiConfig {
   static String cancelRestaurantOrder(int orderId) => '/restaurant/orders/$orderId/cancel';
 
   // --- 💳 PAYMENTS ---
+  static const String worldpayCreateSession = '/payments/worldpay/create-session';
   static const String worldpaySimulate = '/payments/worldpay/simulate';
   static String refundOrder(int orderId) => '/orders/$orderId/refund';
+
+  static final String localDomain = Platform.isAndroid 
+      ? 'http://10.0.2.2:8888' 
+      : 'http://localhost:8888';
+
+  static final String paymentSuccessUrl = '$localDomain/payment-success';
+  static final String paymentFailureUrl = '$localDomain/payment-failed';
 
   // --- 🔔 NOTIFICATIONS & DEVICES ---
   static const String registerFcmToken = '/notifications/token';

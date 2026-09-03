@@ -20,7 +20,9 @@ class _HomeScreenState extends State<HomeScreen> {
     final state = TiffinStateScope.of(context);
     if (!_hasFetchedInitialData) {
       _hasFetchedInitialData = true;
-      Future.microtask(() => state.fetchSelectedRestaurantData());
+      if (!state.isInitialDataLoaded && !state.isLoading) {
+        Future.microtask(() => state.fetchSelectedRestaurantData());
+      }
     }
   }
 
