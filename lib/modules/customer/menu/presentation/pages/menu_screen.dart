@@ -3,6 +3,7 @@ import 'package:kinkitchen/modules/customer/tiffin_state_provider.dart';
 import 'package:kinkitchen/modules/customer/home/presentation/pages/dashboard_screen.dart';
 import 'package:kinkitchen/shared/models/menu_item.dart';
 import 'package:kinkitchen/app/constants/api_constants.dart';
+import 'package:kinkitchen/core/widgets/shimmer_loader.dart';
 
 class MenuScreen extends StatefulWidget {
   const MenuScreen({super.key});
@@ -150,12 +151,16 @@ class _MenuScreenState extends State<MenuScreen> {
         children: [
           _buildBody(context, state, filteredMenuItems),
 
-          // Floating Cart Bar (Matching Screen 2 bottom green pill in design image)
-          if (state.cartItems.isNotEmpty)
-            Positioned(
-              left: 20,
-              right: 20,
-              bottom: 16,
+          // Animated Floating Cart Bar
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOutCubic,
+            left: 20,
+            right: 20,
+            bottom: state.cartItems.isNotEmpty ? 16 : -70,
+            child: AnimatedOpacity(
+              duration: const Duration(milliseconds: 250),
+              opacity: state.cartItems.isNotEmpty ? 1.0 : 0.0,
               child: GestureDetector(
                 onTap: () {
                   context.findAncestorStateOfType<DashboardScreenState>()?.setTab(3); // Cart Tab
@@ -168,9 +173,9 @@ class _MenuScreenState extends State<MenuScreen> {
                     borderRadius: BorderRadius.circular(26),
                     boxShadow: const [
                       BoxShadow(
-                        color: Color(0x3300A859),
-                        blurRadius: 12,
-                        offset: Offset(0, 4),
+                        color: Color(0x4000A859),
+                        blurRadius: 14,
+                        offset: Offset(0, 5),
                       ),
                     ],
                   ),
@@ -179,8 +184,9 @@ class _MenuScreenState extends State<MenuScreen> {
                     children: [
                       Row(
                         children: [
-                          Container(
-                            padding: const EdgeInsets.all(6),
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            padding: const EdgeInsets.all(7),
                             decoration: const BoxDecoration(
                               color: Colors.white24,
                               shape: BoxShape.circle,
@@ -218,6 +224,7 @@ class _MenuScreenState extends State<MenuScreen> {
                 ),
               ),
             ),
+          ),
         ],
       ),
     );
@@ -262,9 +269,7 @@ class _MenuScreenState extends State<MenuScreen> {
     }
 
     if (state.isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(color: brandOrange),
-      );
+      return _buildMenuSkeleton();
     }
 
     return Column(
@@ -593,6 +598,33 @@ class _MenuScreenState extends State<MenuScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildMenuSkeleton() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          const ShimmerLoader.rectangular(width: double.infinity, height: 48, borderRadius: 12),
+          const SizedBox(height: 16),
+          Row(
+            children: const [
+              ShimmerLoader.rectangular(width: 80, height: 32, borderRadius: 16),
+              SizedBox(width: 8),
+              ShimmerLoader.rectangular(width: 90, height: 32, borderRadius: 16),
+              SizedBox(width: 8),
+              ShimmerLoader.rectangular(width: 85, height: 32, borderRadius: 16),
+            ],
+          ),
+          const SizedBox(height: 20),
+          const ShimmerLoader.rectangular(width: double.infinity, height: 140, borderRadius: 16),
+          const SizedBox(height: 14),
+          const ShimmerLoader.rectangular(width: double.infinity, height: 140, borderRadius: 16),
+          const SizedBox(height: 14),
+          const ShimmerLoader.rectangular(width: double.infinity, height: 140, borderRadius: 16),
+        ],
       ),
     );
   }

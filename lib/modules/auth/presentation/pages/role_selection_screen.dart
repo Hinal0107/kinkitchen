@@ -130,8 +130,28 @@ class RoleCard extends StatefulWidget {
   State<RoleCard> createState() => _RoleCardState();
 }
 
-class _RoleCardState extends State<RoleCard> {
+class _RoleCardState extends State<RoleCard> with SingleTickerProviderStateMixin {
   bool _isHovered = false;
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 120),
+    );
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.96).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -139,64 +159,73 @@ class _RoleCardState extends State<RoleCard> {
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
       child: GestureDetector(
-        onTap: widget.onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeInOut,
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: _isHovered ? widget.accentColor : const Color(0xFFE5E7EB),
-              width: _isHovered ? 2.0 : 1.0,
+        onTapDown: (_) => _controller.forward(),
+        onTapUp: (_) {
+          _controller.reverse();
+          widget.onTap();
+        },
+        onTapCancel: () => _controller.reverse(),
+        child: ScaleTransition(
+          scale: _scaleAnimation,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeInOut,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: _isHovered ? widget.accentColor : const Color(0xFFE5E7EB),
+                width: _isHovered ? 2.0 : 1.0,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: _isHovered 
+                      ? widget.accentColor.withValues(alpha: 0.12) 
+                      : Colors.black.withValues(alpha: 0.03),
+                  blurRadius: _isHovered ? 16 : 8,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
-            boxShadow: [
-              BoxShadow(
-                color: _isHovered 
-                    ? widget.accentColor.withOpacity(0.08) 
-                    : Colors.black.withOpacity(0.02),
-                blurRadius: _isHovered ? 16 : 8,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Column(
-            children: [
-              // Icon Wrapper
-              Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  color: widget.accentColor.withOpacity(0.1),
-                  shape: BoxShape.circle,
+            child: Column(
+              children: [
+                // Icon Wrapper
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  width: 60,
+                  height: 60,
+                  decoration: BoxDecoration(
+                    color: widget.accentColor.withValues(alpha: _isHovered ? 0.18 : 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    widget.icon,
+                    color: widget.accentColor,
+                    size: 28,
+                  ),
                 ),
-                child: Icon(
-                  widget.icon,
-                  color: widget.accentColor,
-                  size: 28,
+                const SizedBox(height: 16),
+                // Text
+                Text(
+                  widget.title,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1F2937),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              // Text
-              Text(
-                widget.title,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF1F2937),
+                const SizedBox(height: 6),
+                Text(
+                  widget.subtitle,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Color(0xFF6B7280),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                widget.subtitle,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 13,
-                  color: Color(0xFF6B7280),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

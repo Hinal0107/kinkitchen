@@ -3,6 +3,7 @@ import 'package:kinkitchen/modules/customer/tiffin_state_provider.dart';
 import 'package:kinkitchen/modules/customer/home/presentation/pages/dashboard_screen.dart';
 import 'package:kinkitchen/shared/models/menu_item.dart';
 import 'package:kinkitchen/app/constants/api_constants.dart';
+import 'package:kinkitchen/core/widgets/shimmer_loader.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -162,9 +163,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     if (state.isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(color: brandOrange),
-      );
+      return _buildHomeScreenSkeleton();
     }
 
     if (state.errorMessage != null) {
@@ -493,6 +492,34 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildHomeScreenSkeleton() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const ShimmerLoader.rectangular(width: 140, height: 20, borderRadius: 6),
+          const SizedBox(height: 12),
+          const ShimmerLoader.rectangular(width: double.infinity, height: 180, borderRadius: 20),
+          const SizedBox(height: 24),
+          const ShimmerLoader.rectangular(width: 160, height: 20, borderRadius: 6),
+          const SizedBox(height: 12),
+          const ShimmerLoader.rectangular(width: double.infinity, height: 180, borderRadius: 20),
+          const SizedBox(height: 24),
+          const ShimmerLoader.rectangular(width: 100, height: 20, borderRadius: 6),
+          const SizedBox(height: 12),
+          Row(
+            children: const [
+              ShimmerLoader.rectangular(width: 130, height: 150, borderRadius: 16),
+              SizedBox(width: 12),
+              ShimmerLoader.rectangular(width: 130, height: 150, borderRadius: 16),
+            ],
+          ),
+        ],
       ),
     );
   }

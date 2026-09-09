@@ -11,22 +11,61 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> {
-  double _opacity = 0.0;
-  double _scale = 0.8;
+class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
+  late AnimationController _animationController;
+  late Animation<double> _scaleAnimation;
+  late Animation<double> _fadeAnimation;
+  late Animation<Offset> _slideAnimation;
+  late Animation<double> _pulseAnimation;
   final AuthService _authService = AuthService();
 
   @override
   void initState() {
     super.initState();
-    // Soft entrance animation
-    Future.delayed(const Duration(milliseconds: 200), () {
-      setState(() {
-        _opacity = 1.0;
-        _scale = 1.0;
-      });
-    });
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    );
+
+    _scaleAnimation = Tween<double>(begin: 0.7, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _animationController,
+        curve: const Interval(0.0, 0.6, curve: Curves.easeOutBack),
+      ),
+    );
+
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _animationController,
+        curve: const Interval(0.2, 0.8, curve: Curves.easeOut),
+      ),
+    );
+
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.15),
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(
+        parent: _animationController,
+        curve: const Interval(0.3, 1.0, curve: Curves.easeOutCubic),
+      ),
+    );
+
+    _pulseAnimation = Tween<double>(begin: 0.95, end: 1.05).animate(
+      CurvedAnimation(
+        parent: _animationController,
+        curve: Curves.easeInOut,
+      ),
+    );
+
+    _animationController.forward();
     _checkSession();
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
   }
 
   Future<void> _checkSession() async {
@@ -69,7 +108,7 @@ class _SplashScreenState extends State<SplashScreen> {
             colors: [
               Colors.white,
               Colors.white,
-              const Color(0xFFFF5E00).withOpacity(0.03),
+              const Color(0xFFFF5E00).withOpacity(0.04),
             ],
           ),
         ),
@@ -81,61 +120,56 @@ class _SplashScreenState extends State<SplashScreen> {
               children: [
                 const SizedBox(height: 40),
                 
-                // Animated Branding Logo
-                AnimatedScale(
-                  scale: _scale,
-                  duration: const Duration(seconds: 1),
-                  curve: Curves.easeOutBack,
-                  child: AnimatedOpacity(
-                    opacity: _opacity,
-                    duration: const Duration(milliseconds: 800),
-                    child: const KinKitchenLogo(
-                      size: 180,
-                      showText: true,
-                      subtitle: 'Fresh food, delivered fast to your door.',
+                // Animated Branding Logo with Pulse & Glow
+                ScaleTransition(
+                  scale: _scaleAnimation,
+                  child: FadeTransition(
+                    opacity: _fadeAnimation,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        // Soft orange background aura
+                        ScaleTransition(
+                          scale: _pulseAnimation,
+                          child: Container(
+                            width: 220,
+                            height: 220,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: const Color(0xFFFF5E00).withValues(alpha: 0.06),
+                              // borderRadius: 40,
+                            ),
+                          ),
+                        ),
+                        const KinKitchenLogo(
+                          size: 180,
+                          showText: true,
+                          subtitle: 'Fresh food, delivered fast to your door.',
+                        ),
+                      ],
                     ),
                   ),
                 ),
                 
-                // Actions
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    CustomButton(
-                      text: 'Get Started',
-                      suffixIcon: Icons.arrow_forward,
-                      onPressed: () {
-                        Navigator.pushNamed(context, '/role-selection');
-                      },
-                    ),
-                    const SizedBox(height: 20),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                // Actions with Slide & Fade Transition
+                SlideTransition(
+                  position: _slideAnimation,
+                  child: FadeTransition(
+                    opacity: _fadeAnimation,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Text(
-                          'Already have an account? ',
-                          style: TextStyle(
-                            color: Color(0xFF6B7280),
-                            fontSize: 14,
-                          ),
-                        ),
-                        GestureDetector(
-                          onTap: () {
-                            Navigator.pushNamed(context, '/customer-login');
+                        CustomButton(
+                          text: 'Get Started',
+                          suffixIcon: Icons.arrow_forward,
+                          onPressed: () {
+                            Navigator.pushNamed(context, '/role-selection');
                           },
-                          child: const Text(
-                            'Log In',
-                            style: TextStyle(
-                              color: Color(0xFFFF5E00),
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                            ),
-                          ),
                         ),
+                        const SizedBox(height: 40),
                       ],
                     ),
-                    const SizedBox(height: 20),
-                  ],
+                  ),
                 ),
               ],
             ),

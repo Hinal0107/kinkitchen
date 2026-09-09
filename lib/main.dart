@@ -90,35 +90,82 @@ class MyApp extends StatelessWidget {
             return ResponsiveWrapper(child: child ?? const SizedBox());
           },
           initialRoute: '/',
-          routes: {
-            '/': (context) => const SplashScreen(),
-            '/role-selection': (context) => const RoleSelectionScreen(),
-            '/customer-login': (context) => const CustomerLoginScreen(),
-            '/customer-register': (context) => const CustomerRegisterScreen(),
-            '/restaurant-login': (context) => const RestaurantLoginScreen(),
-            '/restaurant-register': (context) => const RestaurantRegisterScreen(),
-            '/restaurant-selection': (context) => const RestaurantSelectionScreen(),
-            '/dashboard': (context) => const DashboardScreen(),
-            '/restaurant-dashboard': (context) => const RestaurantDashboardScreen(),
-            '/terms-and-conditions': (context) => const TermsAndConditionsScreen(),
-            '/notifications': (context) => const NotificationsScreen(isRestaurant: false),
-            '/restaurant-notifications': (context) => const NotificationsScreen(isRestaurant: true),
-          },
           onGenerateRoute: (settings) {
-            final uri = Uri.parse(settings.name ?? '');
-            if (uri.pathSegments.length == 2 && uri.pathSegments.first == 'orders') {
-              final id = int.tryParse(uri.pathSegments[1]);
-              if (id != null) {
-                return MaterialPageRoute(
-                  builder: (context) => OrderTrackingScreen(orderId: id),
-                  settings: settings,
-                );
-              }
+            WidgetBuilder? builder;
+            switch (settings.name) {
+              case '/':
+                builder = (context) => const SplashScreen();
+                break;
+              case '/role-selection':
+                builder = (context) => const RoleSelectionScreen();
+                break;
+              case '/customer-login':
+                builder = (context) => const CustomerLoginScreen();
+                break;
+              case '/customer-register':
+                builder = (context) => const CustomerRegisterScreen();
+                break;
+              case '/restaurant-login':
+                builder = (context) => const RestaurantLoginScreen();
+                break;
+              case '/restaurant-register':
+                builder = (context) => const RestaurantRegisterScreen();
+                break;
+              case '/restaurant-selection':
+                builder = (context) => const RestaurantSelectionScreen();
+                break;
+              case '/dashboard':
+                builder = (context) => const DashboardScreen();
+                break;
+              case '/restaurant-dashboard':
+                builder = (context) => const RestaurantDashboardScreen();
+                break;
+              case '/terms-and-conditions':
+                builder = (context) => const TermsAndConditionsScreen();
+                break;
+              case '/notifications':
+                builder = (context) => const NotificationsScreen(isRestaurant: false);
+                break;
+              case '/restaurant-notifications':
+                builder = (context) => const NotificationsScreen(isRestaurant: true);
+                break;
+              default:
+                final uri = Uri.parse(settings.name ?? '');
+                if (uri.pathSegments.length == 2 && uri.pathSegments.first == 'orders') {
+                  final id = int.tryParse(uri.pathSegments[1]);
+                  if (id != null) {
+                    builder = (context) => OrderTrackingScreen(orderId: id);
+                  }
+                }
+                if (settings.name == '/orders/tracking' && settings.arguments is int) {
+                  builder = (context) => OrderTrackingScreen(orderId: settings.arguments as int);
+                }
+                break;
             }
-            if (settings.name == '/orders/tracking' && settings.arguments is int) {
-              return MaterialPageRoute(
-                builder: (context) => OrderTrackingScreen(orderId: settings.arguments as int),
+
+            if (builder != null) {
+              return PageRouteBuilder(
                 settings: settings,
+                transitionDuration: const Duration(milliseconds: 280),
+                reverseTransitionDuration: const Duration(milliseconds: 220),
+                pageBuilder: (context, animation, secondaryAnimation) => builder!(context),
+                transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                  final curveAnimation = CurvedAnimation(
+                    parent: animation,
+                    curve: Curves.easeOutCubic,
+                    reverseCurve: Curves.easeInCubic,
+                  );
+                  return FadeTransition(
+                    opacity: curveAnimation,
+                    child: SlideTransition(
+                      position: Tween<Offset>(
+                        begin: const Offset(0.03, 0),
+                        end: Offset.zero,
+                      ).animate(curveAnimation),
+                      child: child,
+                    ),
+                  );
+                },
               );
             }
             return null;

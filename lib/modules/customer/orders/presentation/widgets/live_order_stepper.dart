@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:kinkitchen/shared/models/order.dart';
 
-class LiveOrderStepper extends StatelessWidget {
+class LiveOrderStepper extends StatefulWidget {
   final String orderStatus;
   final String? deliveryStatus;
   final List<OrderTrackingTimelineStep> timeline;
@@ -12,6 +12,34 @@ class LiveOrderStepper extends StatelessWidget {
     this.deliveryStatus,
     this.timeline = const [],
   });
+
+  @override
+  State<LiveOrderStepper> createState() => _LiveOrderStepperState();
+}
+
+class _LiveOrderStepperState extends State<LiveOrderStepper>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
+
+    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.22).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
+  }
 
   static const List<Map<String, dynamic>> _steps = [
     {
@@ -53,8 +81,8 @@ class LiveOrderStepper extends StatelessWidget {
   ];
 
   int _getCurrentStepIndex() {
-    final oStat = orderStatus.toUpperCase();
-    final dStat = deliveryStatus?.toUpperCase() ?? '';
+    final oStat = widget.orderStatus.toUpperCase();
+    final dStat = widget.deliveryStatus?.toUpperCase() ?? '';
 
     if (dStat == 'DELIVERED' || oStat == 'DELIVERED' || oStat == 'COMPLETED') {
       return 5;
@@ -75,8 +103,8 @@ class LiveOrderStepper extends StatelessWidget {
   }
 
   String? _getStepTimestamp(String stepKey) {
-    if (timeline.isEmpty) return null;
-    final match = timeline.where(
+    if (widget.timeline.isEmpty) return null;
+    final match = widget.timeline.where(
       (t) => t.status.toUpperCase() == stepKey.toUpperCase(),
     );
     if (match.isNotEmpty) {
@@ -92,7 +120,7 @@ class LiveOrderStepper extends StatelessWidget {
     const Color activeGreen = Color(0xFF00A859);
     const Color grayColor = Color(0xFF9CA3AF);
 
-    final bool isCancelled = orderStatus.toUpperCase() == 'CANCELLED' || orderStatus.toUpperCase() == 'REJECTED';
+    final bool isCancelled = widget.orderStatus.toUpperCase() == 'CANCELLED' || widget.orderStatus.toUpperCase() == 'REJECTED';
 
     if (isCancelled) {
       return Container(
@@ -111,7 +139,7 @@ class LiveOrderStepper extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Order ${orderStatus.toUpperCase()}',
+                    'Order ${widget.orderStatus.toUpperCase()}',
                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.red),
                   ),
                   const SizedBox(height: 2),
@@ -144,14 +172,50 @@ class LiveOrderStepper extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'LIVE ORDER TRACKING',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.8,
-              color: Color(0xFF6B7280),
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'LIVE ORDER TRACKING',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.8,
+                  color: Color(0xFF6B7280),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: brandOrange.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    ScaleTransition(
+                      scale: _pulseAnimation,
+                      child: Container(
+                        width: 6,
+                        height: 6,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: brandOrange,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    const Text(
+                      'LIVE',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: brandOrange,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
 
@@ -178,29 +242,48 @@ class LiveOrderStepper extends StatelessWidget {
                   // Icon + Vertical Line Column
                   Column(
                     children: [
-                      Container(
-                        width: 32,
-                        height: 32,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: isCurrent
-                              ? brandOrange
-                              : (isPassed ? activeGreen.withValues(alpha: 0.12) : const Color(0xFFF3F4F6)),
-                          border: Border.all(
-                            color: stepColor,
-                            width: isCurrent ? 2 : 1.5,
+                      Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          if (isCurrent)
+                            ScaleTransition(
+                              scale: _pulseAnimation,
+                              child: Container(
+                                width: 38,
+                                height: 38,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: brandOrange.withValues(alpha: 0.2),
+                                ),
+                              ),
+                            ),
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 300),
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: isCurrent
+                                  ? brandOrange
+                                  : (isPassed ? activeGreen.withValues(alpha: 0.12) : const Color(0xFFF3F4F6)),
+                              border: Border.all(
+                                color: stepColor,
+                                width: isCurrent ? 2 : 1.5,
+                              ),
+                            ),
+                            child: Icon(
+                              step['icon'] as IconData,
+                              size: 16,
+                              color: isCurrent
+                                  ? Colors.white
+                                  : (isPassed ? activeGreen : grayColor),
+                            ),
                           ),
-                        ),
-                        child: Icon(
-                          step['icon'] as IconData,
-                          size: 16,
-                          color: isCurrent
-                              ? Colors.white
-                              : (isPassed ? activeGreen : grayColor),
-                        ),
+                        ],
                       ),
                       if (!isLast)
-                        Container(
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 400),
                           width: 2,
                           height: 36,
                           color: isPassed && index < activeIndex

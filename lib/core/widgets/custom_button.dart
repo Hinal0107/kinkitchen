@@ -23,20 +23,19 @@ class CustomButton extends StatefulWidget {
 }
 
 class _CustomButtonState extends State<CustomButton> with SingleTickerProviderStateMixin {
-  double _scale = 1.0;
   late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
 
   @override
   void initState() {
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 100),
-      lowerBound: 0.0,
-      upperBound: 0.04,
-    )..addListener(() {
-        setState(() {});
-      });
+      duration: const Duration(milliseconds: 120),
+    );
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.96).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
+    );
   }
 
   @override
@@ -47,7 +46,6 @@ class _CustomButtonState extends State<CustomButton> with SingleTickerProviderSt
 
   @override
   Widget build(BuildContext context) {
-    _scale = 1.0 - _controller.value;
     final primaryColor = widget.backgroundColor ?? Theme.of(context).primaryColor;
     final txtColor = widget.textColor ?? Colors.white;
 
@@ -64,47 +62,60 @@ class _CustomButtonState extends State<CustomButton> with SingleTickerProviderSt
       onTapCancel: () {
         if (!widget.isLoading) _controller.reverse();
       },
-      child: Transform.scale(
-        scale: _scale,
-        child: Container(
+      child: ScaleTransition(
+        scale: _scaleAnimation,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
           width: double.infinity,
           height: 52,
           decoration: BoxDecoration(
             color: primaryColor,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: primaryColor.withValues(alpha: 0.28),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
           alignment: Alignment.center,
-          child: widget.isLoading
-              ? SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.5,
-                    valueColor: AlwaysStoppedAnimation<Color>(txtColor),
-                  ),
-                )
-              : Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      widget.text,
-                      style: TextStyle(
-                        color: txtColor,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.2,
-                      ),
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 200),
+            child: widget.isLoading
+                ? SizedBox(
+                    key: const ValueKey('loading'),
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.5,
+                      valueColor: AlwaysStoppedAnimation<Color>(txtColor),
                     ),
-                    if (widget.suffixIcon != null) ...[
-                      const SizedBox(width: 8),
-                      Icon(
-                        widget.suffixIcon,
-                        color: txtColor,
-                        size: 18,
+                  )
+                : Row(
+                    key: const ValueKey('content'),
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        widget.text,
+                        style: TextStyle(
+                          color: txtColor,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.2,
+                        ),
                       ),
+                      if (widget.suffixIcon != null) ...[
+                        const SizedBox(width: 8),
+                        Icon(
+                          widget.suffixIcon,
+                          color: txtColor,
+                          size: 18,
+                        ),
+                      ],
                     ],
-                  ],
-                ),
+                  ),
+          ),
         ),
       ),
     );

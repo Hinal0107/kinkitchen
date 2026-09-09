@@ -17,6 +17,11 @@ class Restaurant {
   final double? latitude;
   final double? longitude;
   final double? serviceRadiusKm;
+  final String? bankName;
+  final String? accountHolderName;
+  final String? accountNumber;
+  final String? sortCode;
+  final String? iban;
 
   Restaurant({
     required this.id,
@@ -37,6 +42,11 @@ class Restaurant {
     this.latitude,
     this.longitude,
     this.serviceRadiusKm,
+    this.bankName,
+    this.accountHolderName,
+    this.accountNumber,
+    this.sortCode,
+    this.iban,
   });
 
   factory Restaurant.fromJson(Map<String, dynamic> json) {
@@ -81,6 +91,11 @@ class Restaurant {
       latitude: toNullableDouble(json['latitude'] ?? json['lat']),
       longitude: toNullableDouble(json['longitude'] ?? json['lng']),
       serviceRadiusKm: toNullableDouble(json['service_radius_km'] ?? json['service_radius']),
+      bankName: json['bank_name']?.toString() ?? json['bankName']?.toString(),
+      accountHolderName: json['account_holder_name']?.toString() ?? json['accountHolderName']?.toString(),
+      accountNumber: json['account_number']?.toString() ?? json['accountNumber']?.toString(),
+      sortCode: json['sort_code']?.toString() ?? json['sortCode']?.toString(),
+      iban: json['iban']?.toString(),
     );
   }
 
@@ -104,6 +119,11 @@ class Restaurant {
       'latitude': latitude,
       'longitude': longitude,
       'service_radius_km': serviceRadiusKm,
+      'bank_name': bankName,
+      'account_holder_name': accountHolderName,
+      'account_number': accountNumber,
+      'sort_code': sortCode,
+      'iban': iban,
     };
   }
 }

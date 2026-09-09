@@ -45,18 +45,51 @@ class _CartScreenState extends State<CartScreen> {
         context: context,
         barrierDismissible: false,
         builder: (context) => AlertDialog(
-          title: const Text('Order Placed Successfully!'),
-          content: Text(
-            'Order #${order.orderNumber} has been received by ${state.selectedRestaurant?.name ?? "the kitchen"}.\nPayment Status: PAID (Worldpay Simulated)\nTotal: £${order.total.toStringAsFixed(2)}',
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 12),
+              Container(
+                width: 64,
+                height: 64,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFECFDF5),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.check_circle, color: Color(0xFF00A859), size: 40),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Order Placed Successfully!',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF1F2937)),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Order #${order.orderNumber} has been received by ${state.selectedRestaurant?.name ?? "the kitchen"}.\nPayment Status: PAID (Worldpay Simulated)\nTotal: £${order.total.toStringAsFixed(2)}',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Color(0xFF6B7280), fontSize: 13, height: 1.4),
+              ),
+              const SizedBox(height: 16),
+            ],
           ),
           actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context); // Close dialog
-                final dashboardState = context.findAncestorStateOfType<DashboardScreenState>();
-                dashboardState?.setTab(0); // Return to Home
-              },
-              child: const Text('Back to Home'),
+            Center(
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFFF5E00),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
+                ),
+                onPressed: () {
+                  Navigator.pop(context); // Close dialog
+                  final dashboardState = context.findAncestorStateOfType<DashboardScreenState>();
+                  dashboardState?.setTab(0); // Return to Home
+                },
+                child: const Text('Back to Home', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              ),
             ),
           ],
         ),
@@ -140,131 +173,148 @@ class _CartScreenState extends State<CartScreen> {
                           final cartItem = state.cartItems[index];
                           final imageUrl = ApiConfig.getFormattedImageUrl(cartItem.item.imageUrl);
 
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 12),
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: const Color(0xFFE5E7EB)),
-                              boxShadow: const [
-                                BoxShadow(
-                                  color: Color(0x06000000),
-                                  blurRadius: 8,
-                                  offset: Offset(0, 2),
-                                ),
-                              ],
+                          return Dismissible(
+                            key: ValueKey('${cartItem.item.id}_${cartItem.itemType}'),
+                            direction: DismissDirection.endToStart,
+                            onDismissed: (_) {
+                              state.removeFromCart(cartItem.item);
+                            },
+                            background: Container(
+                              margin: const EdgeInsets.only(bottom: 12),
+                              padding: const EdgeInsets.only(right: 20),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFEF2F2),
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              alignment: Alignment.centerRight,
+                              child: const Icon(Icons.delete_outline, color: Colors.red, size: 24),
                             ),
-                            child: Row(
-                              children: [
-                                // Thumbnail Image
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(10),
-                                  child: Container(
-                                    width: 60,
-                                    height: 60,
-                                    color: const Color(0xFFF3F4F6),
-                                    child: imageUrl != null
-                                        ? Image.network(
-                                            imageUrl,
-                                            fit: BoxFit.cover,
-                                            errorBuilder: (_, __, ___) => const Icon(Icons.fastfood, color: brandOrange),
-                                          )
-                                        : const Icon(Icons.fastfood, color: brandOrange),
+                            child: Container(
+                              margin: const EdgeInsets.only(bottom: 12),
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: const Color(0xFFE5E7EB)),
+                                boxShadow: const [
+                                  BoxShadow(
+                                    color: Color(0x06000000),
+                                    blurRadius: 8,
+                                    offset: Offset(0, 2),
                                   ),
-                                ),
-                                const SizedBox(width: 12),
+                                ],
+                              ),
+                              child: Row(
+                                children: [
+                                  // Thumbnail Image
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(10),
+                                    child: Container(
+                                      width: 60,
+                                      height: 60,
+                                      color: const Color(0xFFF3F4F6),
+                                      child: imageUrl != null
+                                          ? Image.network(
+                                              imageUrl,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (_, __, ___) => const Icon(Icons.fastfood, color: brandOrange),
+                                            )
+                                          : const Icon(Icons.fastfood, color: brandOrange),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
 
-                                // Title, Badge & Price
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        cartItem.item.name,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1F2937)),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Row(
-                                        children: [
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                            decoration: BoxDecoration(
-                                              color: (state.hasActiveSubscription && cartItem.itemType != 'Add-on')
-                                                  ? const Color(0xFFECFDF5)
-                                                  : const Color(0xFFFFF7ED),
-                                              borderRadius: BorderRadius.circular(4),
-                                            ),
-                                            child: Text(
-                                              (state.hasActiveSubscription && cartItem.itemType != 'Add-on')
-                                                  ? 'Covered by Plan (£${cartItem.unitPrice.toStringAsFixed(2)})'
-                                                  : (cartItem.itemType == 'Add-on' ? 'Add-on (Separate Payment)' : 'Veg'),
-                                              style: TextStyle(
-                                                fontSize: 10,
-                                                fontWeight: FontWeight.bold,
+                                  // Title, Badge & Price
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          cartItem.item.name,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1F2937)),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Row(
+                                          children: [
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                              decoration: BoxDecoration(
                                                 color: (state.hasActiveSubscription && cartItem.itemType != 'Add-on')
-                                                    ? const Color(0xFF00A859)
-                                                    : brandOrange,
+                                                    ? const Color(0xFFECFDF5)
+                                                    : const Color(0xFFFFF7ED),
+                                                borderRadius: BorderRadius.circular(4),
+                                              ),
+                                              child: Text(
+                                                (state.hasActiveSubscription && cartItem.itemType != 'Add-on')
+                                                    ? 'Covered by Plan (£${cartItem.unitPrice.toStringAsFixed(2)})'
+                                                    : (cartItem.itemType == 'Add-on' ? 'Add-on (Separate Payment)' : 'Veg'),
+                                                style: TextStyle(
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: (state.hasActiveSubscription && cartItem.itemType != 'Add-on')
+                                                      ? const Color(0xFF00A859)
+                                                      : brandOrange,
+                                                ),
                                               ),
                                             ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          (state.hasActiveSubscription && cartItem.itemType != 'Add-on')
+                                              ? 'Included in Plan (Value: £${cartItem.unitPrice.toStringAsFixed(2)})'
+                                              : '£${cartItem.unitPrice.toStringAsFixed(2)}',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 12.5,
+                                            color: (state.hasActiveSubscription && cartItem.itemType != 'Add-on')
+                                                ? const Color(0xFF00A859)
+                                                : brandOrange,
                                           ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        (state.hasActiveSubscription && cartItem.itemType != 'Add-on')
-                                            ? 'Included in Plan (Value: £${cartItem.unitPrice.toStringAsFixed(2)})'
-                                            : '£${cartItem.unitPrice.toStringAsFixed(2)}',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 12.5,
-                                          color: (state.hasActiveSubscription && cartItem.itemType != 'Add-on')
-                                              ? const Color(0xFF00A859)
-                                              : brandOrange,
                                         ),
-                                      ),
-                                    ],
+                                      ],
+                                    ),
                                   ),
-                                ),
 
-                                // Qty Counter (- / qty / +)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFF3F4F6),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      IconButton(
-                                        constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
-                                        padding: EdgeInsets.zero,
-                                        icon: const Icon(Icons.remove, size: 14, color: Color(0xFF374151)),
-                                        onPressed: () {
-                                          state.updateCartQuantity(cartItem.item.id, cartItem.itemType, cartItem.quantity - 1);
-                                        },
-                                      ),
-                                      Padding(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6.0),
-                                        child: Text(
-                                          '${cartItem.quantity}',
-                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                  // Qty Counter (- / qty / +)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFF3F4F6),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        IconButton(
+                                          constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
+                                          padding: EdgeInsets.zero,
+                                          icon: const Icon(Icons.remove, size: 14, color: Color(0xFF374151)),
+                                          onPressed: () {
+                                            state.updateCartQuantity(cartItem.item.id, cartItem.itemType, cartItem.quantity - 1);
+                                          },
                                         ),
-                                      ),
-                                      IconButton(
-                                        constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
-                                        padding: EdgeInsets.zero,
-                                        icon: const Icon(Icons.add, size: 14, color: brandOrange),
-                                        onPressed: () {
-                                          state.updateCartQuantity(cartItem.item.id, cartItem.itemType, cartItem.quantity + 1);
-                                        },
-                                      ),
-                                    ],
+                                        Padding(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6.0),
+                                          child: Text(
+                                            '${cartItem.quantity}',
+                                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                          ),
+                                        ),
+                                        IconButton(
+                                          constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
+                                          padding: EdgeInsets.zero,
+                                          icon: const Icon(Icons.add, size: 14, color: brandOrange),
+                                          onPressed: () {
+                                            state.updateCartQuantity(cartItem.item.id, cartItem.itemType, cartItem.quantity + 1);
+                                          },
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           );
                         },

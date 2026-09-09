@@ -200,7 +200,7 @@ class _RestaurantLoginScreenState extends State<RestaurantLoginScreen> {
 
                 // Login Button (Green)
                 CustomButton(
-                  text: 'Login to Dashboard',
+                  text: 'Login',
                   backgroundColor: restaurantGreen,
                   isLoading: _isLoading,
                   onPressed: _handleLogin,
@@ -224,7 +224,7 @@ class _RestaurantLoginScreenState extends State<RestaurantLoginScreen> {
                         Navigator.pushNamed(context, '/restaurant-register');
                       },
                       child: const Text(
-                        'Partner your restaurant',
+                        'SignUp',
                         style: TextStyle(
                           color: restaurantGreen,
                           fontWeight: FontWeight.bold,
