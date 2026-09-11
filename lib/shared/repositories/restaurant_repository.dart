@@ -233,6 +233,61 @@ class RestaurantRepository {
     await _apiClient.delete('${ApiConfig.restaurantDailyMeals}/$id');
   }
 
+  // --- 🥤 ADD-ONS ---
+  Future<List<MenuItem>> getAddons() async {
+    final response = await _apiClient.get(ApiConfig.restaurantAddonsPortal);
+    final data = response['data'] ?? response['addons'];
+    final List<dynamic> list = (data is List ? data : (data is Map && data.containsKey('data') ? data['data'] : [])) ?? [];
+    return list.map((json) => MenuItem.fromJson(json as Map<String, dynamic>)).toList();
+  }
+
+  Future<MenuItem> createAddon(Map<String, String> fields, {File? image}) async {
+    dynamic response;
+    if (image != null) {
+      response = await _apiClient.multipart(
+        'POST',
+        ApiConfig.restaurantAddonsPortal,
+        fields,
+        fileKey: 'image',
+        file: image,
+      );
+    } else {
+      response = await _apiClient.post(
+        ApiConfig.restaurantAddonsPortal,
+        body: fields,
+      );
+    }
+    final data = response['data'] ?? response['addon'] ?? response;
+    return MenuItem.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<MenuItem> updateAddon(int id, Map<String, String> fields, {File? image}) async {
+    dynamic response;
+    if (image != null) {
+      response = await _apiClient.multipart(
+        'POST',
+        '${ApiConfig.restaurantAddonsPortal}/$id',
+        {
+          '_method': 'PUT',
+          ...fields,
+        },
+        fileKey: 'image',
+        file: image,
+      );
+    } else {
+      response = await _apiClient.put(
+        '${ApiConfig.restaurantAddonsPortal}/$id',
+        body: fields,
+      );
+    }
+    final data = response['data'] ?? response['addon'] ?? response;
+    return MenuItem.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<void> deleteAddon(int id) async {
+    await _apiClient.delete('${ApiConfig.restaurantAddonsPortal}/$id');
+  }
+
   // --- 📋 SUBSCRIPTION PLANS ---
   Future<List<SubscriptionPlan>> getPlans() async {
     final response = await _apiClient.get(ApiConfig.restaurantSubscriptionPlans);

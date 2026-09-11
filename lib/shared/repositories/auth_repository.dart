@@ -28,23 +28,63 @@ class AuthRepository {
     String? bankIfscCode,
     String? bankBranchName,
   }) async {
+    final bool isRestaurant = role.toLowerCase() == 'restaurant';
+
+    final Map<String, dynamic> body = {
+      'name': name,
+      'email': email,
+      'phone': phone,
+      'password': password,
+      'password_confirmation': passwordConfirmation,
+      'role': role.toLowerCase(),
+    };
+
+    if (isRestaurant) {
+      body['restaurant_name'] = name;
+      if (address != null && address.isNotEmpty) {
+        body['address_line_1'] = address;
+        body['restaurant_address'] = address;
+      }
+      body['restaurant_city'] = (city != null && city.isNotEmpty) ? city : 'London';
+      body['restaurant_state'] = 'England';
+      body['restaurant_country'] = 'United Kingdom';
+      if (postcode != null && postcode.isNotEmpty) {
+        body['pincode'] = postcode;
+        body['restaurant_pincode'] = postcode;
+      }
+      if (bankHolderName != null && bankHolderName.isNotEmpty) {
+        body['bank_account_holder'] = bankHolderName;
+      }
+      if (bankAccountNumber != null && bankAccountNumber.isNotEmpty) {
+        body['bank_account_number'] = bankAccountNumber;
+      }
+      if (bankIfscCode != null && bankIfscCode.isNotEmpty) {
+        body['bank_ifsc_code'] = bankIfscCode;
+        body['bank_ifsc'] = bankIfscCode;
+      }
+      if (bankBranchName != null && bankBranchName.isNotEmpty) {
+        body['bank_branch_name'] = bankBranchName;
+        body['bank_branch'] = bankBranchName;
+      }
+    } else {
+      if (address != null && address.isNotEmpty) body['address_line_1'] = address;
+      if (city != null && city.isNotEmpty) body['city'] = city;
+      if (postcode != null && postcode.isNotEmpty) body['pincode'] = postcode;
+      if (bankHolderName != null && bankHolderName.isNotEmpty) body['bank_account_holder'] = bankHolderName;
+      if (bankAccountNumber != null && bankAccountNumber.isNotEmpty) body['bank_account_number'] = bankAccountNumber;
+      if (bankIfscCode != null && bankIfscCode.isNotEmpty) {
+        body['bank_ifsc_code'] = bankIfscCode;
+        body['bank_ifsc'] = bankIfscCode;
+      }
+      if (bankBranchName != null && bankBranchName.isNotEmpty) {
+        body['bank_branch_name'] = bankBranchName;
+        body['bank_branch'] = bankBranchName;
+      }
+    }
+
     final response = await _apiClient.post(
       ApiConfig.register,
-      body: {
-        'name': name,
-        'email': email,
-        'phone': phone,
-        'password': password,
-        'password_confirmation': passwordConfirmation,
-        'role': role.toLowerCase(),
-        if (address != null && address.isNotEmpty) 'address_line_1': address,
-        if (city != null && city.isNotEmpty) 'city': city,
-        if (postcode != null && postcode.isNotEmpty) 'pincode': postcode,
-        if (bankHolderName != null && bankHolderName.isNotEmpty) 'bank_account_holder': bankHolderName,
-        if (bankAccountNumber != null && bankAccountNumber.isNotEmpty) 'bank_account_number': bankAccountNumber,
-        if (bankIfscCode != null && bankIfscCode.isNotEmpty) 'bank_ifsc_code': bankIfscCode,
-        if (bankBranchName != null && bankBranchName.isNotEmpty) 'bank_branch_name': bankBranchName,
-      },
+      body: body,
     );
 
     final data = response['data'] ?? response;

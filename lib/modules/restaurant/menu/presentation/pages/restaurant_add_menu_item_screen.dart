@@ -34,6 +34,7 @@ class _RestaurantAddMenuItemScreenState extends State<RestaurantAddMenuItemScree
   // Selection States
   String _selectedDietaryType = 'Vegetarian (VEG)';
   String _selectedAvailability = 'Available';
+  String _selectedMealSchedule = "Today's Meal";
   String? _selectedImageName;
   String? _existingImageUrl;
   File? _pickedImageFile;
@@ -65,6 +66,14 @@ class _RestaurantAddMenuItemScreenState extends State<RestaurantAddMenuItemScree
   @override
   void initState() {
     super.initState();
+
+    if (widget.initialMealType != null && widget.initialMealType!.isNotEmpty) {
+      if (widget.initialMealType!.toLowerCase().contains('tomorrow')) {
+        _selectedMealSchedule = "Tomorrow's Meal";
+      } else {
+        _selectedMealSchedule = "Today's Meal";
+      }
+    }
 
     if (widget.isEdit && widget.existingMeal != null) {
       final meal = widget.existingMeal!;
@@ -206,33 +215,65 @@ class _RestaurantAddMenuItemScreenState extends State<RestaurantAddMenuItemScree
         final discountText = _discountPriceController.text.trim();
         final discountVal = double.tryParse(discountText);
 
-        final fields = {
-          'category_id': _selectedCategoryId?.toString() ?? '1',
-          'restaurant_id': widget.stateProvider.profile?.id.toString() ?? '1',
-          'name': _nameController.text.trim(),
-          'description': _descriptionController.text.trim(),
-          'price': priceVal.toStringAsFixed(2),
-          if (discountVal != null && discountVal > 0 && discountVal < priceVal)
-            'discount_price': discountVal.toStringAsFixed(2),
-          'veg_type': vegType,
-          'availability': availability,
-          'status': 'ACTIVE',
-        };
+        final bool isScheduleMode = widget.initialMealType != null && widget.initialMealType!.isNotEmpty;
 
-        if (widget.isEdit && widget.existingMeal != null && widget.existingMeal!['id'] != null) {
-          final int itemId = widget.existingMeal!['id'];
-          await widget.stateProvider.updateMenuItem(itemId, fields, image: _pickedImageFile);
+        if (isScheduleMode) {
+          final bool isTomorrow = _selectedMealSchedule.toLowerCase().contains('tomorrow');
+          final now = DateTime.now();
+          final targetDate = isTomorrow ? now.add(const Duration(days: 1)) : now;
+          final dateStr = '${targetDate.day.toString().padLeft(2, '0')}/${targetDate.month.toString().padLeft(2, '0')}/${targetDate.year}';
+
+          final fields = {
+            'date': dateStr,
+            'name': _nameController.text.trim(),
+            'description': _descriptionController.text.trim(),
+            'price': priceVal.toStringAsFixed(2),
+            if (discountVal != null && discountVal > 0 && discountVal < priceVal)
+              'discount_price': discountVal.toStringAsFixed(2),
+            'veg_type': vegType,
+            'meal_type': isTomorrow ? 'TOMORROW' : 'TODAY',
+            'availability': availability,
+            'status': 'ACTIVE',
+          };
+
+          if (widget.isEdit && widget.existingMeal != null && widget.existingMeal!['id'] != null) {
+            final int mealId = widget.existingMeal!['id'];
+            await widget.stateProvider.updateDailyMeal(mealId, fields, image: _pickedImageFile);
+          } else {
+            await widget.stateProvider.addDailyMeal(fields, image: _pickedImageFile);
+          }
+          await widget.stateProvider.fetchDailyMeals();
         } else {
-          await widget.stateProvider.addMenuItem(fields, image: _pickedImageFile);
-        }
+          final fields = {
+            'category_id': _selectedCategoryId?.toString() ?? '1',
+            'restaurant_id': widget.stateProvider.profile?.id.toString() ?? '1',
+            'name': _nameController.text.trim(),
+            'description': _descriptionController.text.trim(),
+            'price': priceVal.toStringAsFixed(2),
+            if (discountVal != null && discountVal > 0 && discountVal < priceVal)
+              'discount_price': discountVal.toStringAsFixed(2),
+            'veg_type': vegType,
+            'availability': availability,
+            'status': 'ACTIVE',
+          };
 
-        // Refresh state from API/database
-        await widget.stateProvider.fetchMenuItems();
+          if (widget.isEdit && widget.existingMeal != null && widget.existingMeal!['id'] != null) {
+            final int itemId = widget.existingMeal!['id'];
+            await widget.stateProvider.updateMenuItem(itemId, fields, image: _pickedImageFile);
+          } else {
+            await widget.stateProvider.addMenuItem(fields, image: _pickedImageFile);
+          }
+          await widget.stateProvider.fetchMenuItems();
+        }
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(widget.isEdit ? 'Item updated successfully!' : 'Meal scheduled successfully!'),
+              content: Text(
+                widget.isEdit
+                    ? 'Meal updated successfully!'
+                    : (isScheduleMode ? 'Meal scheduled successfully!' : 'Menu item added successfully!'),
+              ),
               backgroundColor: const Color(0xFF00A859),
             ),
           );
@@ -316,12 +357,15 @@ class _RestaurantAddMenuItemScreenState extends State<RestaurantAddMenuItemScree
   @override
   Widget build(BuildContext context) {
     const Color brandOrange = Color(0xFFF15A22);
+    final bool isScheduleMode = widget.initialMealType != null && widget.initialMealType!.isNotEmpty;
 
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
         title: Text(
-          widget.isEdit ? 'Edit Meal' : 'Add Meal',
+          widget.isEdit
+              ? (isScheduleMode ? 'Edit Scheduled Meal' : 'Edit Meal')
+              : (isScheduleMode ? 'Schedule Meal' : 'Add Meal'),
           style: const TextStyle(
             fontWeight: FontWeight.bold,
             fontSize: 18,
@@ -342,6 +386,29 @@ class _RestaurantAddMenuItemScreenState extends State<RestaurantAddMenuItemScree
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                if (isScheduleMode) ...[
+                  // Schedule Target Selector
+                  _buildFieldLabel('Schedule For'),
+                  DropdownButtonFormField<String>(
+                    value: _selectedMealSchedule,
+                    isExpanded: true,
+                    style: const TextStyle(fontSize: 13.5, color: Color(0xFF1F2937)),
+                    decoration: _buildInputDecoration(''),
+                    items: const [
+                      DropdownMenuItem(value: "Today's Meal", child: Text("Today's Meal")),
+                      DropdownMenuItem(value: "Tomorrow's Meal", child: Text("Tomorrow's Meal")),
+                    ],
+                    onChanged: (val) {
+                      if (val != null) {
+                        setState(() {
+                          _selectedMealSchedule = val;
+                        });
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                ],
+
                 // 1. Meal Box Name
                 _buildFieldLabel('Item name'),
                 TextFormField(
@@ -562,7 +629,9 @@ class _RestaurantAddMenuItemScreenState extends State<RestaurantAddMenuItemScree
                             ),
                           )
                         : Text(
-                            widget.isEdit ? 'Update Menu' : 'Create Menu',
+                            widget.isEdit
+                                ? (isScheduleMode ? 'Update Scheduled Meal' : 'Update Menu')
+                                : (isScheduleMode ? 'Schedule Meal' : 'Create Menu'),
                             style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,

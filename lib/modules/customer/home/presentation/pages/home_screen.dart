@@ -114,6 +114,11 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
           IconButton(
+            tooltip: 'Refresh Dashboard',
+            icon: Icon(Icons.refresh, color: brandOrange),
+            onPressed: () => state.fetchSelectedRestaurantData(forceRefresh: true),
+          ),
+          IconButton(
             tooltip: 'Change Kitchen',
             icon: Icon(Icons.storefront_outlined, color: brandOrange),
             onPressed: () => Navigator.pushNamed(context, '/restaurant-selection'),
@@ -183,7 +188,7 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 20),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(backgroundColor: brandOrange),
-                onPressed: () => state.fetchSelectedRestaurantData(),
+                onPressed: () => state.fetchSelectedRestaurantData(forceRefresh: true),
                 child: const Text('Retry', style: TextStyle(color: Colors.white)),
               ),
             ],
@@ -192,10 +197,13 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
 
-    return SingleChildScrollView(
-      physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.all(16),
-      child: Column(
+    return RefreshIndicator(
+      color: brandOrange,
+      onRefresh: () async => await state.fetchSelectedRestaurantData(forceRefresh: true),
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+        padding: const EdgeInsets.all(16),
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // 1. Today's Meal Section Header
@@ -264,8 +272,9 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: 24),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildEmptySection(String message) {
     return Container(

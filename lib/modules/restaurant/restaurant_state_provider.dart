@@ -674,18 +674,16 @@ class RestaurantStateProvider extends ChangeNotifier {
   }) async {
     _setLoading(true);
     try {
-      final categoryId = await _getOrCreateCategoryId('Add-ons', 'Extra side dishes and beverages');
-      await addMenuItem({
-        'category_id': categoryId.toString(),
-        'restaurant_id': profile?.id.toString() ?? '1',
+      await _restaurantRepository.createAddon({
         'name': title,
         'description': description.isNotEmpty ? description : 'Add-on item',
         'price': price.toString(),
         'veg_type': isVeg ? 'VEG' : 'NON_VEG',
         'availability': isAvailable ? '1' : '0',
-        'is_addon': '1',
         'status': 'ACTIVE',
       }, image: image);
+      _isLoading = false;
+      notifyListeners();
     } catch (e) {
       _setError(e.toString());
       rethrow;
@@ -703,19 +701,14 @@ class RestaurantStateProvider extends ChangeNotifier {
   }) async {
     _setLoading(true);
     try {
-      final item = menuItems.firstWhere((i) => i.id == id);
-      await _restaurantRepository.updateMenuItem(id, {
-        'category_id': item.categoryId.toString(),
-        'restaurant_id': item.restaurantId.toString(),
+      await _restaurantRepository.updateAddon(id, {
         'name': newTitle,
-        'description': description.isNotEmpty ? description : item.description,
+        'description': description.isNotEmpty ? description : 'Add-on item',
         'price': price.toString(),
         'veg_type': isVeg ? 'VEG' : 'NON_VEG',
         'availability': isAvailable ? '1' : '0',
-        'is_addon': '1',
         'status': 'ACTIVE',
       }, image: image);
-      menuItems = await _restaurantRepository.getMenuItems();
       _isLoading = false;
       notifyListeners();
     } catch (e) {

@@ -96,6 +96,7 @@ class ApiConfig {
   static const String restaurantCategories = '/restaurant/categories';
   static const String restaurantMenuItems = '/restaurant/menu-items';
   static const String restaurantDailyMeals = '/restaurant/daily-meals';
+  static const String restaurantAddonsPortal = '/restaurant/addons';
   static const String restaurantSubscriptionPlans = '/restaurant/subscription-plans';
   static const String restaurantOrders = '/restaurant/orders';
 
