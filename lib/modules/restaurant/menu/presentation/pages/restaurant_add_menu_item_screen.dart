@@ -108,16 +108,25 @@ class _RestaurantAddMenuItemScreenState extends State<RestaurantAddMenuItemScree
         _existingImageUrl = imgUrl;
         _selectedImageName = 'Existing image attached';
       }
+
+      final dynamic rawCatId = meal['category_id'] ?? meal['categoryId'];
+      if (rawCatId != null) {
+        _selectedCategoryId = (rawCatId is num) ? rawCatId.toInt() : int.tryParse(rawCatId.toString());
+      }
     }
 
     if (widget.stateProvider.categories.isNotEmpty) {
-      _selectedCategoryId = widget.stateProvider.categories.first.id;
+      if (_selectedCategoryId == null || !widget.stateProvider.categories.any((c) => c.id == _selectedCategoryId)) {
+        _selectedCategoryId = widget.stateProvider.categories.first.id;
+      }
     } else {
       widget.stateProvider.fetchCategories().then((_) {
         if (mounted && widget.stateProvider.categories.isNotEmpty) {
-          setState(() {
-            _selectedCategoryId = widget.stateProvider.categories.first.id;
-          });
+          if (_selectedCategoryId == null || !widget.stateProvider.categories.any((c) => c.id == _selectedCategoryId)) {
+            setState(() {
+              _selectedCategoryId = widget.stateProvider.categories.first.id;
+            });
+          }
         }
       });
     }
@@ -244,8 +253,25 @@ class _RestaurantAddMenuItemScreenState extends State<RestaurantAddMenuItemScree
           }
           await widget.stateProvider.fetchDailyMeals();
         } else {
+          int? catId = _selectedCategoryId;
+          if (catId == null || catId <= 0 || !widget.stateProvider.categories.any((c) => c.id == catId)) {
+            if (widget.stateProvider.categories.isNotEmpty) {
+              catId = widget.stateProvider.categories.first.id;
+            } else {
+              await widget.stateProvider.fetchCategories();
+              if (widget.stateProvider.categories.isNotEmpty) {
+                catId = widget.stateProvider.categories.first.id;
+              } else {
+                await widget.stateProvider.createCategory('General', 'General Menu Items', 'ACTIVE');
+                if (widget.stateProvider.categories.isNotEmpty) {
+                  catId = widget.stateProvider.categories.first.id;
+                }
+              }
+            }
+          }
+
           final fields = {
-            'category_id': _selectedCategoryId?.toString() ?? '1',
+            if (catId != null) 'category_id': catId.toString(),
             'restaurant_id': widget.stateProvider.profile?.id.toString() ?? '1',
             'name': _nameController.text.trim(),
             'description': _descriptionController.text.trim(),
@@ -402,6 +428,32 @@ class _RestaurantAddMenuItemScreenState extends State<RestaurantAddMenuItemScree
                       if (val != null) {
                         setState(() {
                           _selectedMealSchedule = val;
+                        });
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                ],
+
+                if (!isScheduleMode && widget.stateProvider.categories.isNotEmpty) ...[
+                  _buildFieldLabel('Category'),
+                  DropdownButtonFormField<int>(
+                    value: widget.stateProvider.categories.any((c) => c.id == _selectedCategoryId)
+                        ? _selectedCategoryId
+                        : widget.stateProvider.categories.first.id,
+                    isExpanded: true,
+                    style: const TextStyle(fontSize: 13.5, color: Color(0xFF1F2937)),
+                    decoration: _buildInputDecoration('Select Category'),
+                    items: widget.stateProvider.categories.map((cat) {
+                      return DropdownMenuItem<int>(
+                        value: cat.id,
+                        child: Text(cat.name),
+                      );
+                    }).toList(),
+                    onChanged: (val) {
+                      if (val != null) {
+                        setState(() {
+                          _selectedCategoryId = val;
                         });
                       }
                     },

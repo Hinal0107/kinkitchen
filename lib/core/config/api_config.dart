@@ -1,13 +1,19 @@
 import 'dart:io' show Platform;
 
 class ApiConfig {
-  static final String baseUrl = Platform.isAndroid 
-      ? 'http://10.0.2.2:8888/backedn-tiffin/tiffin_backend/public/index.php/api/v1' 
-      : 'http://localhost:8888/backedn-tiffin/tiffin_backend/public/index.php/api/v1';
+  // Live Base URL
+  static final String baseUrl = 'https://kingkitchen.addigitalinfo.com/public/index.php/api/v1';
+  // Local Base URL
+  // static final String baseUrl = Platform.isAndroid 
+  //     ? 'http://10.0.2.2:8888/backedn-tiffin/tiffin_backend/public/index.php/api/v1' 
+  //     : 'http://localhost:8888/backedn-tiffin/tiffin_backend/public/index.php/api/v1';
 
-  static final String imageBaseUrl = Platform.isAndroid 
-      ? 'http://10.0.2.2:8888/backedn-tiffin/tiffin_backend/public/storage' 
-      : 'http://localhost:8888/backedn-tiffin/tiffin_backend/public/storage';
+  // Live Image Base URL
+  static final String imageBaseUrl = 'https://kingkitchen.addigitalinfo.com/public/storage';
+  // Local Image Base URL
+  // static final String imageBaseUrl = Platform.isAndroid 
+  //     ? 'http://10.0.2.2:8888/backedn-tiffin/tiffin_backend/public/storage' 
+  //     : 'http://localhost:8888/backedn-tiffin/tiffin_backend/public/storage';
 
   /// Helper to convert relative or backend-returned image paths into fully qualified URLs
   static String? getFormattedImageUrl(String? url) {
@@ -112,9 +118,12 @@ class ApiConfig {
   static const String worldpaySimulate = '/payments/worldpay/simulate';
   static String refundOrder(int orderId) => '/orders/$orderId/refund';
 
-  static final String localDomain = Platform.isAndroid 
-      ? 'http://10.0.2.2:8888' 
-      : 'http://localhost:8888';
+  // Live Domain
+  static final String localDomain = 'https://kingkitchen.addigitalinfo.com';
+  // Local Domain
+  // static final String localDomain = Platform.isAndroid 
+  //     ? 'http://10.0.2.2:8888' 
+  //     : 'http://localhost:8888';
 
   static final String paymentSuccessUrl = '$localDomain/payment-success';
   static final String paymentFailureUrl = '$localDomain/payment-failed';
